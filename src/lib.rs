@@ -1,0 +1,2 @@
+mod npcinfo;
+mod playerinfo;
