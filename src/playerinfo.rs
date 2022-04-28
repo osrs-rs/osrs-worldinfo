@@ -44,20 +44,31 @@ impl PlayerInfo {
     fn setup_gpi(&mut self, playerinfo_id: usize, coordinates: i32) {
         for playerinfo in 0..MAX_PLAYERS {
             if playerinfo_id == playerinfo {
-                self.add_update_record(playerinfo_id, playerinfo, true, coordinates);
+                self.add_update_record(playerinfo_id, true, coordinates)
+                    .expect("failed adding update record for local player");
             }
-            self.add_update_record(playerinfo_id, playerinfo, false, 0);
+            self.add_update_record(playerinfo_id, false, 0)
+                .expect("failed adding update record for external player");
         }
     }
 
     fn add_update_record(
         &mut self,
         playerinfo_id: usize,
-        index: usize,
         local: bool,
         coordinates: i32,
-    ) {
-        self.players.get_mut(playerinfo_id).unwrap().flags.insert(0);
+    ) -> Result<(), Box<dyn Error>> {
+        let playerinfoentry = self
+            .players
+            .get_mut(playerinfo_id)
+            .ok_or("failed getting playerinfoentry")?;
+
+        playerinfoentry.flags.insert(0);
+        playerinfoentry.local.insert(local);
+        playerinfoentry.coordinates.insert(coordinates);
+        playerinfoentry.reset.insert(false);
+
+        Ok(())
     }
 
     pub fn remove_player(&mut self, key: usize) -> Result<(), Box<dyn Error>> {
