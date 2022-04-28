@@ -1,2 +1,2 @@
-mod npcinfo;
-mod playerinfo;
+pub mod npcinfo;
+pub mod playerinfo;
