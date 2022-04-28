@@ -83,7 +83,7 @@ impl PlayerInfo {
     }
 
     // Send player information to the player such as appearance etc
-    pub fn process_player_info(&self, player_id: usize) {
+    pub fn process_player_info(&mut self, player_id: usize) {
         // TODO: Remove this, do proper checking instead in the local_player_info and world_player_info places, simply return if the player id does not exist
         if self.players.get(player_id).is_none() {
             return;
@@ -167,11 +167,21 @@ impl PlayerInfo {
 
         // Group the records
         for i in 0..MAX_PLAYERS {
-            self.group(player_id, i);
+            self.group(player_id, i).ok();
         }
     }
 
-    fn group(&self, player_id: usize, index: usize) {
+    fn group(&mut self, player_id: usize, index: usize) -> Result<(), Box<dyn Error>> {
+        let playerinfoentry = self
+            .players
+            .get_mut(player_id)
+            .ok_or("failed getting playerinfoentry")?;
+
+        *playerinfoentry
+            .flags
+            .get_mut(index)
+            .ok_or("failed getting flags")? >>= 1;
+
         /*
         *world
             .players
@@ -215,6 +225,8 @@ impl PlayerInfo {
                 .unwrap() = false;
         }
         */
+
+        Ok(())
     }
 }
 
