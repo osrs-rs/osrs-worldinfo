@@ -1,6 +1,5 @@
-use std::error::Error;
-
 use slab::Slab;
+use std::error::Error;
 
 struct PlayerInfoEntry {}
 
