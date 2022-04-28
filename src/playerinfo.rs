@@ -81,140 +81,141 @@ impl PlayerInfo {
 
         Ok(())
     }
-}
 
-// Send player information to the player such as appearance etc
-pub fn process_player_info(player_id: usize) {
-    // TODO: Remove this, do proper checking instead
-    /*if world.players.get(player_id).is_none() {
-        return;
-    }*/
+    // Send player information to the player such as appearance etc
+    pub fn process_player_info(&self, player_id: usize) {
+        // TODO: Remove this, do proper checking instead in the local_player_info and world_player_info places, simply return if the player id does not exist
+        if self.players.get(player_id).is_none() {
+            return;
+        }
 
-    let mut main_buf = BitWriter::endian(Vec::new(), BigEndian);
-    let mut mask_buf = ByteBuffer::new(60000);
+        let mut main_buf = BitWriter::endian(Vec::new(), BigEndian);
+        // Supply the mask buffer instead, as to prevent this big ass allocation
+        let mut mask_buf = ByteBuffer::new(60000);
 
-    let mut local = 0;
-    let mut added = 0;
+        let mut local = 0;
+        let mut added = 0;
 
-    /*local += local_player_info(
-        world,
-        player_id,
-        &mut main_buf,
-        &mut mask_buf,
-        UPDATE_GROUP_ACTIVE,
-    );*/
-    main_buf.byte_align().unwrap();
+        /*local += local_player_info(
+            world,
+            player_id,
+            &mut main_buf,
+            &mut mask_buf,
+            UPDATE_GROUP_ACTIVE,
+        );*/
+        main_buf.byte_align().unwrap();
 
-    /*local += local_player_info(
-        world,
-        player_id,
-        &mut main_buf,
-        &mut mask_buf,
-        UPDATE_GROUP_INACTIVE,
-    );*/
-    main_buf.byte_align().unwrap();
+        /*local += local_player_info(
+            world,
+            player_id,
+            &mut main_buf,
+            &mut mask_buf,
+            UPDATE_GROUP_INACTIVE,
+        );*/
+        main_buf.byte_align().unwrap();
 
-    /*added += world_player_info(
-        world,
-        player_id,
-        &mut main_buf,
-        &mut mask_buf,
-        UPDATE_GROUP_INACTIVE,
-        local,
-        added,
-    );*/
-    main_buf.byte_align().unwrap();
+        /*added += world_player_info(
+            world,
+            player_id,
+            &mut main_buf,
+            &mut mask_buf,
+            UPDATE_GROUP_INACTIVE,
+            local,
+            added,
+        );*/
+        main_buf.byte_align().unwrap();
 
-    /*world_player_info(
-        world,
-        player_id,
-        &mut main_buf,
-        &mut mask_buf,
-        UPDATE_GROUP_ACTIVE,
-        local,
-        added,
-    );*/
-    main_buf.byte_align().unwrap();
+        /*world_player_info(
+            world,
+            player_id,
+            &mut main_buf,
+            &mut mask_buf,
+            UPDATE_GROUP_ACTIVE,
+            local,
+            added,
+        );*/
+        main_buf.byte_align().unwrap();
 
-    // Create buffer for sending GPI packet
-    let mut send_buffer: ByteBuffer = ByteBuffer::new(60000);
+        // Create buffer for sending GPI packet
+        let mut send_buffer: ByteBuffer = ByteBuffer::new(60000);
 
-    // Align the bitmode to make it byte oriented again
-    main_buf.byte_align().unwrap();
+        // Align the bitmode to make it byte oriented again
+        main_buf.byte_align().unwrap();
 
-    // Convert the main_buf into a writer
-    let mut vec = main_buf.into_writer();
+        // Convert the main_buf into a writer
+        let mut vec = main_buf.into_writer();
 
-    /*println!("Bit buffer:");
-    for b in vec.iter() {
-        print!("{:#01X} ", b);
+        /*println!("Bit buffer:");
+        for b in vec.iter() {
+            print!("{:#01X} ", b);
+        }
+        println!("");
+        println!("Mask buffer, write pos = {}:", mask_buf.write_pos);
+        for b in 0..mask_buf.write_pos {
+            print!("{:#01X} ", mask_buf.data.get(b).unwrap());
+        }
+        println!("");*/
+
+        // Write the mask_buf's data
+        vec.write(&mask_buf.data[..mask_buf.write_pos]).unwrap();
+
+        //println!("Vec length: {}", vec.len());
+        //println!("Data length: {}", send_buffer.data.len());
+
+        // Now write the bytes to the send_buffer
+        send_buffer.write_bytes(&vec);
+
+        // Group the records
+        for i in 0..MAX_PLAYERS {
+            self.group(player_id, i);
+        }
     }
-    println!("");
-    println!("Mask buffer, write pos = {}:", mask_buf.write_pos);
-    for b in 0..mask_buf.write_pos {
-        print!("{:#01X} ", mask_buf.data.get(b).unwrap());
-    }
-    println!("");*/
 
-    // Write the mask_buf's data
-    vec.write(&mask_buf.data[..mask_buf.write_pos]).unwrap();
-
-    //println!("Vec length: {}", vec.len());
-    //println!("Data length: {}", send_buffer.data.len());
-
-    // Now write the bytes to the send_buffer
-    send_buffer.write_bytes(&vec);
-
-    // Group the records
-    for i in 0..2047 {
-        group(player_id, i);
-    }
-}
-
-fn group(player_id: usize, index: usize) {
-    /*
-    *world
-        .players
-        .get_mut(player_id)
-        .unwrap()
-        .update_record_flags
-        .get_mut(index)
-        .unwrap() >>= 1;
-
-    if has_record_been_reset(world, player_id, index) {
+    fn group(&self, player_id: usize, index: usize) {
+        /*
         *world
             .players
             .get_mut(player_id)
             .unwrap()
             .update_record_flags
             .get_mut(index)
-            .unwrap() = 0;
+            .unwrap() >>= 1;
 
-        *world
-            .players
-            .get_mut(player_id)
-            .unwrap()
-            .update_record_coordinates
-            .get_mut(index)
-            .unwrap() = 0;
+        if has_record_been_reset(world, player_id, index) {
+            *world
+                .players
+                .get_mut(player_id)
+                .unwrap()
+                .update_record_flags
+                .get_mut(index)
+                .unwrap() = 0;
 
-        *world
-            .players
-            .get_mut(player_id)
-            .unwrap()
-            .update_record_local
-            .get_mut(index)
-            .unwrap() = false;
+            *world
+                .players
+                .get_mut(player_id)
+                .unwrap()
+                .update_record_coordinates
+                .get_mut(index)
+                .unwrap() = 0;
 
-        *world
-            .players
-            .get_mut(player_id)
-            .unwrap()
-            .update_record_reset
-            .get_mut(index)
-            .unwrap() = false;
+            *world
+                .players
+                .get_mut(player_id)
+                .unwrap()
+                .update_record_local
+                .get_mut(index)
+                .unwrap() = false;
+
+            *world
+                .players
+                .get_mut(player_id)
+                .unwrap()
+                .update_record_reset
+                .get_mut(index)
+                .unwrap() = false;
+        }
+        */
     }
-    */
 }
 
 #[cfg(test)]
