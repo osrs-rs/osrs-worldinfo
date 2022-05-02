@@ -8,6 +8,91 @@ const MAX_PLAYERS: usize = 2047;
 const UPDATE_GROUP_ACTIVE: i32 = 0;
 const UPDATE_GROUP_INACTIVE: i32 = 1;
 
+fn write_mask_update(
+    mask_buf: &mut ByteBuffer,
+    playerinfo: &PlayerInfoOther,
+    target_id: usize,
+    mask_packets: i32,
+) {
+}
+
+fn remove_local_player(
+    bit_buf: &mut BitWriter<Vec<u8>, bitstream_io::BigEndian>,
+    player_id: usize,
+    target_id: usize,
+) {
+    let new_coordinates = 123;
+    let record_coordinates = 12311;
+
+    let coordinate_change = new_coordinates != record_coordinates;
+
+    bit_buf.write_bit(true).unwrap();
+    bit_buf.write_bit(false).unwrap();
+    bit_buf.write(2, 0).unwrap();
+    bit_buf.write_bit(coordinate_change).unwrap();
+
+    if coordinate_change {
+        write_coordinate_multiplier(bit_buf, record_coordinates, new_coordinates).unwrap();
+    }
+}
+
+fn write_coordinate_multiplier(
+    bit_buf: &mut BitWriter<Vec<u8>, bitstream_io::BigEndian>,
+    old_multiplier: i32,
+    new_multiplier: i32,
+) -> Result<(), Box<dyn Error>> {
+    let current_multiplier_y = new_multiplier & 0xFF;
+    let current_multiplier_x = (new_multiplier >> 8) & 0xFF;
+    let current_level = (new_multiplier >> 8) & 0x3;
+
+    let last_multiplier_y = old_multiplier & 0xFF;
+    let last_multiplier_x = (old_multiplier >> 8) & 0xFF;
+    let last_level = (old_multiplier >> 8) & 0x3;
+
+    let diff_x = current_multiplier_x - last_multiplier_x;
+    let diff_y = current_multiplier_y - last_multiplier_y;
+    let diff_level = current_level - last_level;
+
+    let level_change = diff_level != 0;
+    let small_change = diff_x.abs() <= 1 && diff_y.abs() <= 1;
+
+    if level_change {
+        bit_buf.write(2, 1)?;
+        bit_buf.write(2, diff_level as u32)?;
+    } else if small_change {
+        let direction;
+
+        if diff_x == -1 && diff_y == -1 {
+            direction = 0;
+        } else if diff_x == 1 && diff_y == -1 {
+            direction = 2;
+        } else if diff_x == -1 && diff_y == 1 {
+            direction = 5;
+        } else if diff_x == 1 && diff_y == 1 {
+            direction = 7;
+        } else if diff_y == -1 {
+            direction = 1;
+        } else if diff_x == -1 {
+            direction = 3;
+        } else if diff_x == 1 {
+            direction = 4;
+        } else {
+            direction = 6;
+        }
+
+        bit_buf.write(2, 2)?;
+        bit_buf.write(2, diff_level as u32)?;
+        bit_buf.write(3, direction)?;
+    } else {
+        bit_buf.write(2, 3)?;
+        bit_buf.write(2, diff_level as u32)?;
+        bit_buf.write(8, diff_x as u32 & 0xFF)?;
+        bit_buf.write(8, diff_y as u32 & 0xFF)?;
+    }
+
+    Ok(())
+}
+
 // An entry for a player, which contains data about all other players
 struct PlayerInfoEntry {
     playerinfoother: Slab<PlayerInfoOther>,
@@ -140,7 +225,7 @@ impl PlayerInfo {
         main_buf.byte_align().unwrap();
 
         // Create buffer for sending GPI packet
-        let mut send_buffer: ByteBuffer = ByteBuffer::new(60000);
+        let mut send_buffer = ByteBuffer::new(60000);
 
         // Align the bitmode to make it byte oriented again
         main_buf.byte_align().unwrap();
@@ -198,6 +283,7 @@ impl PlayerInfo {
             // Check whether the local player should be removed and turned into a global player
             if playerinfoentryother.remove_the_local_player {
                 playerinfoentryother.reset = true;
+                remove_local_player(bit_buf, player_id, other_player_id);
                 continue;
             }
 
@@ -205,7 +291,7 @@ impl PlayerInfo {
             let move_update = true;
 
             if mask_update {
-                // Write mask update
+                write_mask_update(mask_buf, playerinfoentryother, other_player_id, 1);
             }
 
             if mask_update || move_update {
