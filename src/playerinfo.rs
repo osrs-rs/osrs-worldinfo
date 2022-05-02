@@ -9,7 +9,7 @@ const UPDATE_GROUP_INACTIVE: i32 = 1;
 
 // An entry for a player, which contains data about all other players
 struct PlayerInfoEntry {
-    playerinfoother: Slab<PlayerInfoData>,
+    playerinfodata: Slab<PlayerInfoData>,
 }
 
 // TODO: Consider just making this the PlayerInfoEntry, as this is kind of wasted
@@ -26,7 +26,7 @@ struct PlayerInfoData {
 impl PlayerInfoEntry {
     pub fn new() -> PlayerInfoEntry {
         PlayerInfoEntry {
-            playerinfoother: Slab::new(),
+            playerinfodata: Slab::new(),
         }
     }
 }
@@ -70,7 +70,7 @@ impl PlayerInfo {
             .get_mut(playerinfo_id)
             .ok_or("failed getting playerinfoentry")?;
 
-        playerinfoentry.playerinfoother.insert(PlayerInfoData {
+        playerinfoentry.playerinfodata.insert(PlayerInfoData {
             flags: 0,
             local,
             coordinates,
@@ -177,7 +177,7 @@ impl PlayerInfo {
                 .players
                 .get_mut(player_id)
                 .unwrap()
-                .playerinfoother
+                .playerinfodata
                 .get_mut(other_player_id)
                 .unwrap();
 
@@ -246,7 +246,7 @@ impl PlayerInfo {
                 .players
                 .get_mut(player_id)
                 .unwrap()
-                .playerinfoother
+                .playerinfodata
                 .get_mut(i)
                 .unwrap();
 
@@ -299,7 +299,7 @@ impl PlayerInfo {
             .players
             .get_mut(player_id)
             .ok_or("failed getting playerinfoentry")?
-            .playerinfoother
+            .playerinfodata
             .get_mut(index)
             .ok_or("failed playerinfoother")?;
 
