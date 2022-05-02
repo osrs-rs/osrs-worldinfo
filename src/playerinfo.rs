@@ -8,6 +8,10 @@ const MAX_PLAYERS: usize = 2047;
 const UPDATE_GROUP_ACTIVE: i32 = 0;
 const UPDATE_GROUP_INACTIVE: i32 = 1;
 
+fn testy1() {
+    println!("Testy");
+}
+
 // An entry for a player, which contains data about all other players
 struct PlayerInfoEntry {
     flags: Slab<i32>,
@@ -96,22 +100,16 @@ impl PlayerInfo {
         let mut local = 0;
         let mut added = 0;
 
-        /*local += local_player_info(
-            world,
-            player_id,
-            &mut main_buf,
-            &mut mask_buf,
-            UPDATE_GROUP_ACTIVE,
-        );*/
+        local +=
+            self.local_player_info(player_id, &mut main_buf, &mut mask_buf, UPDATE_GROUP_ACTIVE);
         main_buf.byte_align().unwrap();
 
-        /*local += local_player_info(
-            world,
+        local += self.local_player_info(
             player_id,
             &mut main_buf,
             &mut mask_buf,
             UPDATE_GROUP_INACTIVE,
-        );*/
+        );
         main_buf.byte_align().unwrap();
 
         /*added += world_player_info(
@@ -169,6 +167,33 @@ impl PlayerInfo {
         for i in 0..MAX_PLAYERS {
             self.group(player_id, i).ok();
         }
+    }
+
+    fn local_player_info(
+        &mut self,
+        player_id: usize,
+        bit_buf: &mut BitWriter<Vec<u8>, bitstream_io::BigEndian>,
+        mask_buf: &mut ByteBuffer,
+        update_group: i32,
+    ) -> i32 {
+        let mut skip_count = 0;
+        let mut local_players = 0;
+
+        for i in 0..MAX_PLAYERS {
+            let playerinfoentry = self.players.get_mut(player_id).unwrap();
+
+            testy1();
+
+            playerinfoentry.coordinates = Slab::new();
+
+            local_players += 1;
+        }
+
+        local_players
+    }
+
+    fn testy2(&mut self) {
+        println!("Testy");
     }
 
     fn group(&mut self, player_id: usize, index: usize) -> Result<(), Box<dyn Error>> {
