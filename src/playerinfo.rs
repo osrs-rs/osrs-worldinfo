@@ -22,6 +22,7 @@ struct PlayerInfoOther {
     local: bool,
     coordinates: i32,
     reset: bool,
+    remove_the_local_player: bool,
 }
 
 impl PlayerInfoEntry {
@@ -78,6 +79,7 @@ impl PlayerInfo {
             local,
             coordinates,
             reset: false,
+            remove_the_local_player: false,
         });
 
         Ok(())
@@ -103,16 +105,19 @@ impl PlayerInfo {
         let mut local = 0;
         let mut added = 0;
 
-        local +=
-            self.local_player_info(player_id, &mut main_buf, &mut mask_buf, UPDATE_GROUP_ACTIVE);
+        local += self
+            .local_player_info(player_id, &mut main_buf, &mut mask_buf, UPDATE_GROUP_ACTIVE)
+            .unwrap();
         main_buf.byte_align().unwrap();
 
-        local += self.local_player_info(
-            player_id,
-            &mut main_buf,
-            &mut mask_buf,
-            UPDATE_GROUP_INACTIVE,
-        );
+        local += self
+            .local_player_info(
+                player_id,
+                &mut main_buf,
+                &mut mask_buf,
+                UPDATE_GROUP_INACTIVE,
+            )
+            .unwrap();
         main_buf.byte_align().unwrap();
 
         /*added += world_player_info(
@@ -178,12 +183,13 @@ impl PlayerInfo {
         bit_buf: &mut BitWriter<Vec<u8>, bitstream_io::BigEndian>,
         mask_buf: &mut ByteBuffer,
         update_group: i32,
-    ) -> i32 {
+    ) -> Result<i32, Box<dyn Error>> {
         let mut skip_count = 0;
         let mut local_players = 0;
 
         for other_player_id in 0..MAX_PLAYERS {
-            let playerinfoentry = self
+            // Grab the playerinfo
+            let playerinfoentryother = self
                 .players
                 .get_mut(player_id)
                 .unwrap()
@@ -191,14 +197,59 @@ impl PlayerInfo {
                 .get_mut(other_player_id)
                 .unwrap();
 
-            testy1();
+            // Test whether the playerinfo is local, and whether it is in the correct update group (active, inactive)
+            if !(playerinfoentryother.local && (update_group & 0x1) == playerinfoentryother.flags) {
+                continue;
+            }
 
-            playerinfoentry.coordinates = 1234;
+            // Check whether entries should be skipped
+            if skip_count > 0 {
+                skip_count -= 1;
+                playerinfoentryother.flags |= 0x2;
+                continue;
+            }
 
+            // Increment the local players by 1
             local_players += 1;
+
+            // Check whether the local player should be removed and turned into a global player
+            if playerinfoentryother.remove_the_local_player {
+                playerinfoentryother.reset = true;
+                continue;
+            }
+
+            let mask_update = true;
+            let move_update = true;
+
+            if mask_update {
+                // Write mask update
+            }
+
+            if mask_update || move_update {
+                bit_buf.write_bit(true)?;
+            }
+
+            if move_update {
+                // Write local movement
+            } else if mask_update {
+                // Write mask update signal
+            } else {
+                playerinfoentryother.flags |= 0x2;
+                skip_count = 123123;
+                // write_skip_count
+            }
         }
 
-        local_players
+        Ok(local_players)
+    }
+
+    fn local_skip_count(
+        &mut self,
+        update_group: i32,
+        offset: i32,
+        player_id: usize,
+        target: usize,
+    ) {
     }
 
     fn testy2(&mut self) {
