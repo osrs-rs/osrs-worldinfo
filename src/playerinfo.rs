@@ -73,14 +73,12 @@ impl PlayerInfo {
             .get_mut(playerinfo_id)
             .ok_or("failed getting playerinfoentry")?;
 
-        let playerinfoentryother = PlayerInfoOther {
+        playerinfoentry.playerinfoother.insert(PlayerInfoOther {
             flags: 0,
             local,
             coordinates,
             reset: false,
-        };
-
-        playerinfoentry.playerinfoother.insert(playerinfoentryother);
+        });
 
         Ok(())
     }
@@ -214,53 +212,16 @@ impl PlayerInfo {
             .ok_or("failed getting playerinfoentry")?
             .playerinfoother
             .get_mut(index)
-            .ok_or("lol")?;
+            .ok_or("failed playerinfoother")?;
 
         playerinfoentryother.flags >>= 1;
 
-        /*
-        *world
-            .players
-            .get_mut(player_id)
-            .unwrap()
-            .update_record_flags
-            .get_mut(index)
-            .unwrap() >>= 1;
-
-        if has_record_been_reset(world, player_id, index) {
-            *world
-                .players
-                .get_mut(player_id)
-                .unwrap()
-                .update_record_flags
-                .get_mut(index)
-                .unwrap() = 0;
-
-            *world
-                .players
-                .get_mut(player_id)
-                .unwrap()
-                .update_record_coordinates
-                .get_mut(index)
-                .unwrap() = 0;
-
-            *world
-                .players
-                .get_mut(player_id)
-                .unwrap()
-                .update_record_local
-                .get_mut(index)
-                .unwrap() = false;
-
-            *world
-                .players
-                .get_mut(player_id)
-                .unwrap()
-                .update_record_reset
-                .get_mut(index)
-                .unwrap() = false;
+        if playerinfoentryother.reset {
+            playerinfoentryother.flags = 0;
+            playerinfoentryother.coordinates = 0;
+            playerinfoentryother.local = false;
+            playerinfoentryother.reset = false;
         }
-        */
 
         Ok(())
     }
