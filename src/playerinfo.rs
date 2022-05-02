@@ -9,11 +9,11 @@ const UPDATE_GROUP_INACTIVE: i32 = 1;
 
 // An entry for a player, which contains data about all other players
 struct PlayerInfoEntry {
-    playerinfoother: Slab<PlayerInfoOther>,
+    playerinfoother: Slab<PlayerInfoData>,
 }
 
 // TODO: Consider just making this the PlayerInfoEntry, as this is kind of wasted
-struct PlayerInfoOther {
+struct PlayerInfoData {
     flags: i32,
     local: bool,
     coordinates: i32,
@@ -70,7 +70,7 @@ impl PlayerInfo {
             .get_mut(playerinfo_id)
             .ok_or("failed getting playerinfoentry")?;
 
-        playerinfoentry.playerinfoother.insert(PlayerInfoOther {
+        playerinfoentry.playerinfoother.insert(PlayerInfoData {
             flags: 0,
             local,
             coordinates,
@@ -318,7 +318,7 @@ impl PlayerInfo {
 
 fn write_mask_update(
     mask_buf: &mut ByteBuffer,
-    playerinfo: &PlayerInfoOther,
+    playerinfo: &PlayerInfoData,
     target_id: usize,
     mask_packets: i32,
 ) {
