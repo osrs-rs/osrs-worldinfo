@@ -150,7 +150,7 @@ impl PlayerInfo {
         let mut vec = main_buf.into_writer();
 
         // Write the mask_buf's data
-        vec.write(&mask_buf.data[..mask_buf.write_pos]).unwrap();
+        vec.write_all(&mask_buf.data[..mask_buf.write_pos]).unwrap();
 
         // Now write the bytes to the send_buffer
         send_buffer.write_bytes(&vec);
