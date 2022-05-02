@@ -218,7 +218,8 @@ impl PlayerInfo {
             }
 
             if move_update {
-                write_local_movement(bit_buf, other_player_id, mask_update);
+                write_local_movement(bit_buf, other_player_id, mask_update)
+                    .expect("failed writing local movement");
             } else if mask_update {
                 write_mask_update_signal(bit_buf).expect("failed writing mask update signal");
             } else {
@@ -400,24 +401,11 @@ fn write_coordinate_multiplier(
     Ok(())
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn add_player_test() {
-        let mut playerinfo = PlayerInfo::new();
-        playerinfo.add_player(123).unwrap();
-
-        assert_eq!(playerinfo.players.len(), 1);
-    }
-}
-
 fn write_local_movement(
     bit_buf: &mut BitWriter<Vec<u8>, bitstream_io::BigEndian>,
     target_id: usize,
     mask_update: bool,
-) -> Option<()> {
+) -> Result<(), Box<dyn Error>> {
     let direction_diff_x = [-1, 0, 1, -1, 1, -1, 0, 1];
     let direction_diff_y = [-1, -1, -1, 0, 0, 1, 1, 1];
 
@@ -431,19 +419,19 @@ fn write_local_movement(
     let large_change = false;
     let teleport = large_change || false;
 
-    bit_buf.write_bit(mask_update).ok()?;
+    bit_buf.write_bit(mask_update)?;
     if teleport {
         // SKIP TELEPORT FOR NOW
-        bit_buf.write(2, 3).ok()?;
-        bit_buf.write_bit(large_change).ok()?;
-        bit_buf.write(2, diff_level & 0x3).ok()?;
+        bit_buf.write(2, 3)?;
+        bit_buf.write_bit(large_change)?;
+        bit_buf.write(2, diff_level & 0x3)?;
 
         if large_change {
-            bit_buf.write(14, diff_x & 0x3FFF).ok()?;
-            bit_buf.write(14, diff_y & 0x3FFF).ok()?;
+            bit_buf.write(14, diff_x & 0x3FFF)?;
+            bit_buf.write(14, diff_y & 0x3FFF)?;
         } else {
-            bit_buf.write(5, diff_x & 0x1F).ok()?;
-            bit_buf.write(5, diff_y & 0x1F).ok()?;
+            bit_buf.write(5, diff_x & 0x1F)?;
+            bit_buf.write(5, diff_y & 0x1F)?;
         }
     } else {
         /*let steps = &mut world.players.get_mut(target_id)?.movement_queue.next_steps;
@@ -486,7 +474,7 @@ fn write_local_movement(
         steps.clear();*/
     }
 
-    Some(())
+    Ok(())
 }
 
 fn write_mask_update_signal(
@@ -496,4 +484,17 @@ fn write_mask_update_signal(
     bit_buf.write(2, 0)?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn add_player_test() {
+        let mut playerinfo = PlayerInfo::new();
+        playerinfo.add_player(123).unwrap();
+
+        assert_eq!(playerinfo.players.len(), 1);
+    }
 }
