@@ -43,6 +43,8 @@ impl PlayerInfo {
     }
 
     pub fn add_player(&mut self, coordinates: i32) -> Result<(), Box<dyn Error>> {
+        println!("Got a vacant key yo {}", self.players.vacant_key());
+
         // Insert the new player into the slab, retrieve their id
         let playerinfo_id = self.players.insert(PlayerInfoEntry::new());
 
