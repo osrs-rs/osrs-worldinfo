@@ -1,7 +1,7 @@
 use bitstream_io::{BigEndian, BitWrite, BitWriter};
 use osrs_buffer::ByteBuffer;
 use slab::Slab;
-use std::{error::Error, io::Write};
+use std::{cmp, error::Error, io::Write};
 
 const MAX_PLAYERS: usize = 2047;
 
@@ -235,13 +235,8 @@ impl PlayerInfo {
                 // Write mask update signal
             } else {
                 playerinfoentryother.flags |= 0x2;
-                skip_count = self.local_skip_count(
-                    update_group,
-                    other_player_id + 1,
-                    player_id,
-                    other_player_id,
-                );
-                // write_skip_count
+                skip_count = self.local_skip_count(update_group, player_id, other_player_id + 1)?;
+                self.write_skip_count(bit_buf, skip_count);
             }
         }
 
@@ -251,15 +246,64 @@ impl PlayerInfo {
     fn local_skip_count(
         &mut self,
         update_group: i32,
-        offset: usize,
         player_id: usize,
-        target: usize,
-    ) -> i32 {
-        123
+        offset: usize,
+    ) -> Result<i32, Box<dyn Error>> {
+        let mut count = 0;
+
+        for i in offset..MAX_PLAYERS {
+            // Grab the playerinfo
+            let playerinfoentryother = self
+                .players
+                .get_mut(player_id)
+                .unwrap()
+                .playerinfoother
+                .get_mut(i)
+                .unwrap();
+
+            // Return if the playerinfo is not in this group
+            if !(playerinfoentryother.local && (update_group & 0x1) == playerinfoentryother.flags) {
+                continue;
+            }
+
+            // Break if a player needs to be updated
+            let is_update_required = true;
+            if is_update_required {
+                break;
+            }
+
+            // Increment the skip count by 1
+            count += 1;
+        }
+
+        Ok(count)
     }
 
-    fn testy2(&mut self) {
-        println!("Testy");
+    fn write_skip_count(
+        &self,
+        bit_buf: &mut BitWriter<Vec<u8>, bitstream_io::BigEndian>,
+        skip_count: i32,
+    ) /*-> Result<(), Box<dyn Error>>*/
+    {
+        bit_buf.write(1, 0).unwrap();
+
+        if skip_count == 0 {
+            bit_buf.write(2, skip_count as u32).unwrap();
+        } else if skip_count < 32 {
+            bit_buf.write(2, 1).unwrap();
+            bit_buf.write(5, skip_count as u32).unwrap();
+        } else if skip_count < 256 {
+            bit_buf.write(2, 2).unwrap();
+            bit_buf.write(8, skip_count as u32).unwrap();
+        } else {
+            if skip_count > MAX_PLAYERS as i32 {
+                println!("Skip count out of range error");
+            }
+            bit_buf.write(2, 3).unwrap();
+            bit_buf
+                .write(11, cmp::min(MAX_PLAYERS, skip_count as usize) as u32)
+                .unwrap();
+        }
     }
 
     fn group(&mut self, player_id: usize, index: usize) -> Result<(), Box<dyn Error>> {
