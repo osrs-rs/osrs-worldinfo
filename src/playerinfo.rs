@@ -8,15 +8,12 @@ const MAX_PLAYERS: usize = 2047;
 const UPDATE_GROUP_ACTIVE: i32 = 0;
 const UPDATE_GROUP_INACTIVE: i32 = 1;
 
-fn testy1() {
-    println!("Testy");
-}
-
 // An entry for a player, which contains data about all other players
 struct PlayerInfoEntry {
     playerinfoother: Slab<PlayerInfoOther>,
 }
 
+// TODO: Consider just making this the PlayerInfoEntry, as this is kind of wasted
 struct PlayerInfoOther {
     flags: i32,
     local: bool,
@@ -151,22 +148,8 @@ impl PlayerInfo {
         // Convert the main_buf into a writer
         let mut vec = main_buf.into_writer();
 
-        /*println!("Bit buffer:");
-        for b in vec.iter() {
-            print!("{:#01X} ", b);
-        }
-        println!("");
-        println!("Mask buffer, write pos = {}:", mask_buf.write_pos);
-        for b in 0..mask_buf.write_pos {
-            print!("{:#01X} ", mask_buf.data.get(b).unwrap());
-        }
-        println!("");*/
-
         // Write the mask_buf's data
         vec.write(&mask_buf.data[..mask_buf.write_pos]).unwrap();
-
-        //println!("Vec length: {}", vec.len());
-        //println!("Data length: {}", send_buffer.data.len());
 
         // Now write the bytes to the send_buffer
         send_buffer.write_bytes(&vec);
@@ -236,7 +219,7 @@ impl PlayerInfo {
             } else {
                 playerinfoentryother.flags |= 0x2;
                 skip_count = self.local_skip_count(update_group, player_id, other_player_id + 1)?;
-                self.write_skip_count(bit_buf, skip_count);
+                self.write_skip_count(bit_buf, skip_count).ok();
             }
         }
 
@@ -283,27 +266,26 @@ impl PlayerInfo {
         &self,
         bit_buf: &mut BitWriter<Vec<u8>, bitstream_io::BigEndian>,
         skip_count: i32,
-    ) /*-> Result<(), Box<dyn Error>>*/
-    {
-        bit_buf.write(1, 0).unwrap();
+    ) -> Result<(), Box<dyn Error>> {
+        bit_buf.write(1, 0)?;
 
         if skip_count == 0 {
-            bit_buf.write(2, skip_count as u32).unwrap();
+            bit_buf.write(2, skip_count as u32)?;
         } else if skip_count < 32 {
-            bit_buf.write(2, 1).unwrap();
-            bit_buf.write(5, skip_count as u32).unwrap();
+            bit_buf.write(2, 1)?;
+            bit_buf.write(5, skip_count as u32)?;
         } else if skip_count < 256 {
-            bit_buf.write(2, 2).unwrap();
-            bit_buf.write(8, skip_count as u32).unwrap();
+            bit_buf.write(2, 2)?;
+            bit_buf.write(8, skip_count as u32)?;
         } else {
             if skip_count > MAX_PLAYERS as i32 {
                 println!("Skip count out of range error");
             }
-            bit_buf.write(2, 3).unwrap();
-            bit_buf
-                .write(11, cmp::min(MAX_PLAYERS, skip_count as usize) as u32)
-                .unwrap();
+            bit_buf.write(2, 3)?;
+            bit_buf.write(11, cmp::min(MAX_PLAYERS, skip_count as usize) as u32)?;
         }
+
+        Ok(())
     }
 
     fn group(&mut self, player_id: usize, index: usize) -> Result<(), Box<dyn Error>> {
