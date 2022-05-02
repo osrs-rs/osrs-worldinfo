@@ -4,94 +4,8 @@ use slab::Slab;
 use std::{cmp, error::Error, io::Write};
 
 const MAX_PLAYERS: usize = 2047;
-
 const UPDATE_GROUP_ACTIVE: i32 = 0;
 const UPDATE_GROUP_INACTIVE: i32 = 1;
-
-fn write_mask_update(
-    mask_buf: &mut ByteBuffer,
-    playerinfo: &PlayerInfoOther,
-    target_id: usize,
-    mask_packets: i32,
-) {
-}
-
-fn remove_local_player(
-    bit_buf: &mut BitWriter<Vec<u8>, bitstream_io::BigEndian>,
-    player_id: usize,
-    target_id: usize,
-) {
-    let new_coordinates = 123;
-    let record_coordinates = 12311;
-
-    let coordinate_change = new_coordinates != record_coordinates;
-
-    bit_buf.write_bit(true).unwrap();
-    bit_buf.write_bit(false).unwrap();
-    bit_buf.write(2, 0).unwrap();
-    bit_buf.write_bit(coordinate_change).unwrap();
-
-    if coordinate_change {
-        write_coordinate_multiplier(bit_buf, record_coordinates, new_coordinates).unwrap();
-    }
-}
-
-fn write_coordinate_multiplier(
-    bit_buf: &mut BitWriter<Vec<u8>, bitstream_io::BigEndian>,
-    old_multiplier: i32,
-    new_multiplier: i32,
-) -> Result<(), Box<dyn Error>> {
-    let current_multiplier_y = new_multiplier & 0xFF;
-    let current_multiplier_x = (new_multiplier >> 8) & 0xFF;
-    let current_level = (new_multiplier >> 8) & 0x3;
-
-    let last_multiplier_y = old_multiplier & 0xFF;
-    let last_multiplier_x = (old_multiplier >> 8) & 0xFF;
-    let last_level = (old_multiplier >> 8) & 0x3;
-
-    let diff_x = current_multiplier_x - last_multiplier_x;
-    let diff_y = current_multiplier_y - last_multiplier_y;
-    let diff_level = current_level - last_level;
-
-    let level_change = diff_level != 0;
-    let small_change = diff_x.abs() <= 1 && diff_y.abs() <= 1;
-
-    if level_change {
-        bit_buf.write(2, 1)?;
-        bit_buf.write(2, diff_level as u32)?;
-    } else if small_change {
-        let direction;
-
-        if diff_x == -1 && diff_y == -1 {
-            direction = 0;
-        } else if diff_x == 1 && diff_y == -1 {
-            direction = 2;
-        } else if diff_x == -1 && diff_y == 1 {
-            direction = 5;
-        } else if diff_x == 1 && diff_y == 1 {
-            direction = 7;
-        } else if diff_y == -1 {
-            direction = 1;
-        } else if diff_x == -1 {
-            direction = 3;
-        } else if diff_x == 1 {
-            direction = 4;
-        } else {
-            direction = 6;
-        }
-
-        bit_buf.write(2, 2)?;
-        bit_buf.write(2, diff_level as u32)?;
-        bit_buf.write(3, direction)?;
-    } else {
-        bit_buf.write(2, 3)?;
-        bit_buf.write(2, diff_level as u32)?;
-        bit_buf.write(8, diff_x as u32 & 0xFF)?;
-        bit_buf.write(8, diff_y as u32 & 0xFF)?;
-    }
-
-    Ok(())
-}
 
 // An entry for a player, which contains data about all other players
 struct PlayerInfoEntry {
@@ -105,6 +19,8 @@ struct PlayerInfoOther {
     coordinates: i32,
     reset: bool,
     remove_the_local_player: bool,
+    masks: Vec<i32>,
+    movement_steps: Vec<i32>,
 }
 
 impl PlayerInfoEntry {
@@ -127,14 +43,10 @@ impl PlayerInfo {
     }
 
     pub fn add_player(&mut self, coordinates: i32) -> Result<(), Box<dyn Error>> {
+        // Insert the new player into the slab, retrieve their id
         let playerinfo_id = self.players.insert(PlayerInfoEntry::new());
 
-        self.setup_gpi(playerinfo_id, coordinates);
-
-        Ok(())
-    }
-
-    fn setup_gpi(&mut self, playerinfo_id: usize, coordinates: i32) {
+        // Generate the playerinfo for the given player
         for playerinfo in 0..MAX_PLAYERS {
             if playerinfo_id == playerinfo {
                 self.add_update_record(playerinfo_id, true, coordinates)
@@ -143,6 +55,8 @@ impl PlayerInfo {
             self.add_update_record(playerinfo_id, false, 0)
                 .expect("failed adding update record for external player");
         }
+
+        Ok(())
     }
 
     fn add_update_record(
@@ -162,6 +76,8 @@ impl PlayerInfo {
             coordinates,
             reset: false,
             remove_the_local_player: false,
+            masks: Vec::new(),
+            movement_steps: Vec::new(),
         });
 
         Ok(())
@@ -287,21 +203,24 @@ impl PlayerInfo {
                 continue;
             }
 
-            let mask_update = true;
-            let move_update = true;
+            // Determine whether there is mask and movement updates
+            let mask_update = playerinfoentryother.masks.len() > 0;
+            let move_update = playerinfoentryother.movement_steps.len() > 0;
 
+            // If there is a mask update, write them out
             if mask_update {
                 write_mask_update(mask_buf, playerinfoentryother, other_player_id, 1);
             }
 
+            // If there is either a mask or movement update, write a bit signifying so
             if mask_update || move_update {
                 bit_buf.write_bit(true)?;
             }
 
             if move_update {
-                // Write local movement
+                write_local_movement(bit_buf, other_player_id, mask_update);
             } else if mask_update {
-                // Write mask update signal
+                write_mask_update_signal(bit_buf).expect("failed writing mask update signal");
             } else {
                 playerinfoentryother.flags |= 0x2;
                 skip_count = self.local_skip_count(update_group, player_id, other_player_id + 1)?;
@@ -396,6 +315,91 @@ impl PlayerInfo {
     }
 }
 
+fn write_mask_update(
+    mask_buf: &mut ByteBuffer,
+    playerinfo: &PlayerInfoOther,
+    target_id: usize,
+    mask_packets: i32,
+) {
+}
+
+fn remove_local_player(
+    bit_buf: &mut BitWriter<Vec<u8>, bitstream_io::BigEndian>,
+    player_id: usize,
+    target_id: usize,
+) {
+    let new_coordinates = 123;
+    let record_coordinates = 12311;
+
+    let coordinate_change = new_coordinates != record_coordinates;
+
+    bit_buf.write_bit(true).unwrap();
+    bit_buf.write_bit(false).unwrap();
+    bit_buf.write(2, 0).unwrap();
+    bit_buf.write_bit(coordinate_change).unwrap();
+
+    if coordinate_change {
+        write_coordinate_multiplier(bit_buf, record_coordinates, new_coordinates).unwrap();
+    }
+}
+
+fn write_coordinate_multiplier(
+    bit_buf: &mut BitWriter<Vec<u8>, bitstream_io::BigEndian>,
+    old_multiplier: i32,
+    new_multiplier: i32,
+) -> Result<(), Box<dyn Error>> {
+    let current_multiplier_y = new_multiplier & 0xFF;
+    let current_multiplier_x = (new_multiplier >> 8) & 0xFF;
+    let current_level = (new_multiplier >> 8) & 0x3;
+
+    let last_multiplier_y = old_multiplier & 0xFF;
+    let last_multiplier_x = (old_multiplier >> 8) & 0xFF;
+    let last_level = (old_multiplier >> 8) & 0x3;
+
+    let diff_x = current_multiplier_x - last_multiplier_x;
+    let diff_y = current_multiplier_y - last_multiplier_y;
+    let diff_level = current_level - last_level;
+
+    let level_change = diff_level != 0;
+    let small_change = diff_x.abs() <= 1 && diff_y.abs() <= 1;
+
+    if level_change {
+        bit_buf.write(2, 1)?;
+        bit_buf.write(2, diff_level as u32)?;
+    } else if small_change {
+        let direction;
+
+        if diff_x == -1 && diff_y == -1 {
+            direction = 0;
+        } else if diff_x == 1 && diff_y == -1 {
+            direction = 2;
+        } else if diff_x == -1 && diff_y == 1 {
+            direction = 5;
+        } else if diff_x == 1 && diff_y == 1 {
+            direction = 7;
+        } else if diff_y == -1 {
+            direction = 1;
+        } else if diff_x == -1 {
+            direction = 3;
+        } else if diff_x == 1 {
+            direction = 4;
+        } else {
+            direction = 6;
+        }
+
+        bit_buf.write(2, 2)?;
+        bit_buf.write(2, diff_level as u32)?;
+        bit_buf.write(3, direction)?;
+    } else {
+        bit_buf.write(2, 3)?;
+        bit_buf.write(2, diff_level as u32)?;
+        bit_buf.write(8, diff_x as u32 & 0xFF)?;
+        bit_buf.write(8, diff_y as u32 & 0xFF)?;
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -407,4 +411,89 @@ mod tests {
 
         assert_eq!(playerinfo.players.len(), 1);
     }
+}
+
+fn write_local_movement(
+    bit_buf: &mut BitWriter<Vec<u8>, bitstream_io::BigEndian>,
+    target_id: usize,
+    mask_update: bool,
+) -> Option<()> {
+    let direction_diff_x = [-1, 0, 1, -1, 1, -1, 0, 1];
+    let direction_diff_y = [-1, -1, -1, 0, 0, 1, 1, 1];
+
+    let curr_coords = 123;
+    let last_coords = 124;
+
+    let diff_x = 111;
+    let diff_y = 222;
+    let diff_level = 333;
+
+    let large_change = false;
+    let teleport = large_change || false;
+
+    bit_buf.write_bit(mask_update).ok()?;
+    if teleport {
+        // SKIP TELEPORT FOR NOW
+        bit_buf.write(2, 3).ok()?;
+        bit_buf.write_bit(large_change).ok()?;
+        bit_buf.write(2, diff_level & 0x3).ok()?;
+
+        if large_change {
+            bit_buf.write(14, diff_x & 0x3FFF).ok()?;
+            bit_buf.write(14, diff_y & 0x3FFF).ok()?;
+        } else {
+            bit_buf.write(5, diff_x & 0x1F).ok()?;
+            bit_buf.write(5, diff_y & 0x1F).ok()?;
+        }
+    } else {
+        /*let steps = &mut world.players.get_mut(target_id)?.movement_queue.next_steps;
+        let walk_step = steps.get(0)?;
+        let walk_rotation = get_direction_rotation(&walk_step.dir);
+
+        let mut dx = *direction_diff_x.get(walk_rotation as usize)?;
+        let mut dy = *direction_diff_y.get(walk_rotation as usize)?;
+
+        let mut running = false;
+        let mut direction = 0;
+
+        if let Some(run_step) = steps.get(1) {
+            println!("WHY ARE YOU RUNNING 2");
+            let run_rotation = get_direction_rotation(&run_step.dir);
+
+            dx += *direction_diff_x.get(run_rotation as usize)?;
+            dy += *direction_diff_y.get(run_rotation as usize)?;
+
+            if let Some(run_dir) = run_dir(dx, dy) {
+                direction = run_dir;
+                running = true;
+            }
+        }
+
+        if !running {
+            if let Some(walk_dir) = walk_dir(dx, dy) {
+                direction = walk_dir;
+            }
+        }
+
+        if running {
+            bit_buf.write(2, 2).ok()?;
+            bit_buf.write(4, direction).ok()?;
+        } else {
+            bit_buf.write(2, 1).ok()?;
+            bit_buf.write(3, direction).ok()?;
+        }
+
+        steps.clear();*/
+    }
+
+    Some(())
+}
+
+fn write_mask_update_signal(
+    bit_buf: &mut BitWriter<Vec<u8>, bitstream_io::BigEndian>,
+) -> Result<(), Box<dyn Error>> {
+    bit_buf.write(1, 1)?;
+    bit_buf.write(2, 0)?;
+
+    Ok(())
 }
