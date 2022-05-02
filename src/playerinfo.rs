@@ -235,7 +235,12 @@ impl PlayerInfo {
                 // Write mask update signal
             } else {
                 playerinfoentryother.flags |= 0x2;
-                skip_count = 123123;
+                skip_count = self.local_skip_count(
+                    update_group,
+                    other_player_id + 1,
+                    player_id,
+                    other_player_id,
+                );
                 // write_skip_count
             }
         }
@@ -246,10 +251,11 @@ impl PlayerInfo {
     fn local_skip_count(
         &mut self,
         update_group: i32,
-        offset: i32,
+        offset: usize,
         player_id: usize,
         target: usize,
-    ) {
+    ) -> i32 {
+        123
     }
 
     fn testy2(&mut self) {
