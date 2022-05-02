@@ -14,19 +14,20 @@ fn testy1() {
 
 // An entry for a player, which contains data about all other players
 struct PlayerInfoEntry {
-    flags: Slab<i32>,
-    local: Slab<bool>,
-    coordinates: Slab<i32>,
-    reset: Slab<bool>,
+    playerinfoother: Slab<PlayerInfoOther>,
+}
+
+struct PlayerInfoOther {
+    flags: i32,
+    local: bool,
+    coordinates: i32,
+    reset: bool,
 }
 
 impl PlayerInfoEntry {
     pub fn new() -> PlayerInfoEntry {
         PlayerInfoEntry {
-            flags: Slab::new(),
-            local: Slab::new(),
-            coordinates: Slab::new(),
-            reset: Slab::new(),
+            playerinfoother: Slab::new(),
         }
     }
 }
@@ -72,10 +73,14 @@ impl PlayerInfo {
             .get_mut(playerinfo_id)
             .ok_or("failed getting playerinfoentry")?;
 
-        playerinfoentry.flags.insert(0);
-        playerinfoentry.local.insert(local);
-        playerinfoentry.coordinates.insert(coordinates);
-        playerinfoentry.reset.insert(false);
+        let playerinfoentryother = PlayerInfoOther {
+            flags: 0,
+            local,
+            coordinates,
+            reset: false,
+        };
+
+        playerinfoentry.playerinfoother.insert(playerinfoentryother);
 
         Ok(())
     }
@@ -179,12 +184,18 @@ impl PlayerInfo {
         let mut skip_count = 0;
         let mut local_players = 0;
 
-        for i in 0..MAX_PLAYERS {
-            let playerinfoentry = self.players.get_mut(player_id).unwrap();
+        for other_player_id in 0..MAX_PLAYERS {
+            let playerinfoentry = self
+                .players
+                .get_mut(player_id)
+                .unwrap()
+                .playerinfoother
+                .get_mut(other_player_id)
+                .unwrap();
 
             testy1();
 
-            playerinfoentry.coordinates = Slab::new();
+            playerinfoentry.coordinates = 1234;
 
             local_players += 1;
         }
@@ -197,15 +208,15 @@ impl PlayerInfo {
     }
 
     fn group(&mut self, player_id: usize, index: usize) -> Result<(), Box<dyn Error>> {
-        let playerinfoentry = self
+        let playerinfoentryother = self
             .players
             .get_mut(player_id)
-            .ok_or("failed getting playerinfoentry")?;
-
-        *playerinfoentry
-            .flags
+            .ok_or("failed getting playerinfoentry")?
+            .playerinfoother
             .get_mut(index)
-            .ok_or("failed getting flags")? >>= 1;
+            .ok_or("lol")?;
+
+        playerinfoentryother.flags >>= 1;
 
         /*
         *world
