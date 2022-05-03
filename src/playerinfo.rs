@@ -57,7 +57,7 @@ pub struct DirectionMask {
 }
 
 // An entry for a player, which contains data about all other players
-struct PlayerInfoEntry {
+pub struct PlayerInfoEntry {
     playerinfodata: Slab<PlayerInfoData>,
 }
 
@@ -121,6 +121,20 @@ impl PlayerInfo {
         Ok(())
     }
 
+    pub fn get_player(&mut self, key: usize) -> Option<&PlayerInfoEntry> {
+        self.players.get(key)
+    }
+
+    pub fn get_player_mut(&mut self, key: usize) -> Option<&mut PlayerInfoEntry> {
+        self.players.get_mut(key)
+    }
+
+    pub fn remove_player(&mut self, key: usize) -> Result<()> {
+        self.players.remove(key);
+
+        Ok(())
+    }
+
     fn add_update_record(
         &mut self,
         playerinfo: &mut PlayerInfoEntry,
@@ -141,14 +155,8 @@ impl PlayerInfo {
         Ok(())
     }
 
-    pub fn remove_player(&mut self, key: usize) -> Result<()> {
-        self.players.remove(key);
-
-        Ok(())
-    }
-
     // Send player information to the player such as appearance etc
-    pub fn process_player_info(&mut self, player_id: usize) -> Result<Vec<u8>> {
+    pub fn process(&mut self, player_id: usize) -> Result<Vec<u8>> {
         // TODO: Remove this, do proper checking instead in the local_player_info and world_player_info places, simply return if the player id does not exist
         if self.players.get(player_id).is_none() {
             return Ok(Vec::new());
@@ -280,15 +288,16 @@ impl PlayerInfo {
                 write_mask_update_signal(bit_buf).expect("failed writing mask update signal");
             } else {
                 playerinfoentryother.flags |= 0x2;
-                skip_count = self.local_skip_count(update_group, player_id, other_player_id + 1)?;
-                self.write_skip_count(bit_buf, skip_count).ok();
+                skip_count =
+                    self.get_local_skip_count(update_group, player_id, other_player_id + 1)?;
+                write_skip_count(bit_buf, skip_count).ok();
             }
         }
 
         Ok(local_players)
     }
 
-    fn local_skip_count(
+    fn get_local_skip_count(
         &mut self,
         update_group: i32,
         player_id: usize,
@@ -324,7 +333,7 @@ impl PlayerInfo {
         Ok(count)
     }
 
-    fn global_skip_count(
+    fn get_global_skip_count(
         &mut self,
         update_group: i32,
         player_id: usize,
@@ -355,32 +364,6 @@ impl PlayerInfo {
         }
 
         Ok(count)
-    }
-
-    fn write_skip_count(
-        &self,
-        bit_buf: &mut BitWriter<Vec<u8>, bitstream_io::BigEndian>,
-        skip_count: i32,
-    ) -> Result<()> {
-        bit_buf.write(1, 0)?;
-
-        if skip_count == 0 {
-            bit_buf.write(2, skip_count as u32)?;
-        } else if skip_count < 32 {
-            bit_buf.write(2, 1)?;
-            bit_buf.write(5, skip_count as u32)?;
-        } else if skip_count < 256 {
-            bit_buf.write(2, 2)?;
-            bit_buf.write(8, skip_count as u32)?;
-        } else {
-            if skip_count > MAX_PLAYERS as i32 {
-                return Err(anyhow!("Skip count out of range error"));
-            }
-            bit_buf.write(2, 3)?;
-            bit_buf.write(11, cmp::min(MAX_PLAYERS, skip_count as usize) as u32)?;
-        }
-
-        Ok(())
     }
 
     fn group(&mut self, player_id: usize, index: usize) -> Result<()> {
@@ -485,12 +468,38 @@ impl PlayerInfo {
             }*/
 
             playerinfoentryother.flags |= 0x2;
-            skip_count = self.global_skip_count(update_group, player_id, other_player_id + 1)?;
-            self.write_skip_count(bit_buf, skip_count).ok();
+            skip_count =
+                self.get_global_skip_count(update_group, player_id, other_player_id + 1)?;
+            write_skip_count(bit_buf, skip_count).ok();
         }
 
         Ok(0)
     }
+}
+
+fn write_skip_count(
+    bit_buf: &mut BitWriter<Vec<u8>, bitstream_io::BigEndian>,
+    skip_count: i32,
+) -> Result<()> {
+    bit_buf.write(1, 0)?;
+
+    if skip_count == 0 {
+        bit_buf.write(2, skip_count as u32)?;
+    } else if skip_count < 32 {
+        bit_buf.write(2, 1)?;
+        bit_buf.write(5, skip_count as u32)?;
+    } else if skip_count < 256 {
+        bit_buf.write(2, 2)?;
+        bit_buf.write(8, skip_count as u32)?;
+    } else {
+        if skip_count > MAX_PLAYERS as i32 {
+            return Err(anyhow!("Skip count out of range error"));
+        }
+        bit_buf.write(2, 3)?;
+        bit_buf.write(11, cmp::min(MAX_PLAYERS, skip_count as usize) as u32)?;
+    }
+
+    Ok(())
 }
 
 fn write_mask_update(mask_buf: &mut ByteBuffer, playerinfo: &mut PlayerInfoData) {
@@ -924,16 +933,14 @@ mod tests {
             .masks
             .push(PlayerMask::DirectionMask(DirectionMask { direction: 1536 }));
 
-        let vec = playerinfo.process_player_info(0)?;
-
+        let vec = playerinfo.process(0)?;
         println!("Vec with mask: {:?}", vec);
 
         let mut s = DefaultHasher::new();
         vec.hash(&mut s);
         assert_eq!(s.finish(), 9926834204379934435);
 
-        let vec = playerinfo.process_player_info(0)?;
-
+        let vec = playerinfo.process(0)?;
         println!("Vec with mask: {:?}", vec);
 
         Ok(())
