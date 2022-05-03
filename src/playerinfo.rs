@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use bitstream_io::{BigEndian, BitWrite, BitWriter};
 use osrs_buffer::ByteBuffer;
 use slab::Slab;
@@ -290,7 +290,7 @@ impl PlayerInfo {
             bit_buf.write(8, skip_count as u32)?;
         } else {
             if skip_count > MAX_PLAYERS as i32 {
-                println!("Skip count out of range error");
+                return Err(anyhow!("Skip count out of range error"));
             }
             bit_buf.write(2, 3)?;
             bit_buf.write(11, cmp::min(MAX_PLAYERS, skip_count as usize) as u32)?;
