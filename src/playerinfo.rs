@@ -8,6 +8,8 @@ const MAX_PLAYERS: usize = 2047;
 const UPDATE_GROUP_ACTIVE: i32 = 0;
 const UPDATE_GROUP_INACTIVE: i32 = 1;
 
+enum PlayerMasks {}
+
 // An entry for a player, which contains data about all other players
 struct PlayerInfoEntry {
     playerinfodata: Slab<PlayerInfoData>,
