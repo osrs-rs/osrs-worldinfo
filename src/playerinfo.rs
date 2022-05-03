@@ -92,6 +92,7 @@ impl PlayerInfo {
         }
     }
 
+    // TODO: Return the coordinates of all global players in this function, as to aid with the InterestInit packet
     pub fn add_player(&mut self, coordinates: i32) -> Result<()> {
         // Get the playerinfo id using a vacant key, check for exceeding limit
         let playerinfo_id = self.players.vacant_key();
@@ -232,10 +233,10 @@ impl PlayerInfo {
             let playerinfoentryother = self
                 .players
                 .get_mut(player_id)
-                .unwrap()
+                .context("failed 1")?
                 .playerinfodata
                 .get_mut(other_player_id)
-                .unwrap();
+                .context("failed 2")?;
 
             // Test whether the playerinfo is local, and whether it is in the correct update group (active, inactive)
             if !(playerinfoentryother.local && (update_group & 0x1) == playerinfoentryother.flags) {
@@ -302,10 +303,10 @@ impl PlayerInfo {
             let playerinfoentryother = self
                 .players
                 .get_mut(player_id)
-                .unwrap()
+                .context("failed 1")?
                 .playerinfodata
                 .get_mut(i)
-                .unwrap();
+                .context("failed 2")?;
 
             // Return if the playerinfo is not in this group
             if !(playerinfoentryother.local && (update_group & 0x1) == playerinfoentryother.flags) {
@@ -338,10 +339,10 @@ impl PlayerInfo {
             let playerinfoentryother = self
                 .players
                 .get_mut(player_id)
-                .unwrap()
+                .context("failed 1")?
                 .playerinfodata
                 .get_mut(i)
-                .unwrap();
+                .context("failed 2")?;
 
             // Return if the playerinfo is not in this group
             if !(!playerinfoentryother.local && (update_group & 0x1) == playerinfoentryother.flags)
@@ -428,10 +429,10 @@ impl PlayerInfo {
             let playerinfoentryother = self
                 .players
                 .get_mut(player_id)
-                .unwrap()
+                .context("failed 1")?
                 .playerinfodata
                 .get_mut(other_player_id)
-                .unwrap();
+                .context("failed 2")?;
 
             // Test whether the playerinfo is ocal, and whether it is in the correct update group (active, inactive)
             if !(!playerinfoentryother.local && (update_group & 0x1) == playerinfoentryother.flags)
@@ -919,7 +920,7 @@ mod tests {
             .masks
             .push(PlayerMask::DirectionMask(DirectionMask { direction: 1536 }));
 
-        let vec = playerinfo.process_player_info(0).unwrap();
+        let vec = playerinfo.process_player_info(0)?;
 
         println!("Vec with mask: {:?}", vec);
 
