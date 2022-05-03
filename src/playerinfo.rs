@@ -147,10 +147,10 @@ impl PlayerInfo {
     }
 
     // Send player information to the player such as appearance etc
-    pub fn process_player_info(&mut self, player_id: usize) -> Result<()> {
+    pub fn process_player_info(&mut self, player_id: usize) -> Result<Vec<u8>> {
         // TODO: Remove this, do proper checking instead in the local_player_info and world_player_info places, simply return if the player id does not exist
         if self.players.get(player_id).is_none() {
-            return Ok(());
+            return Ok(Vec::new());
         }
 
         let mut main_buf = BitWriter::endian(Vec::new(), BigEndian);
@@ -214,7 +214,7 @@ impl PlayerInfo {
             self.group(player_id, i).ok();
         }
 
-        Ok(())
+        Ok(vec)
     }
 
     fn local_player_info(
@@ -747,9 +747,62 @@ mod tests {
     #[test]
     fn playerinfo_test() -> Result<()> {
         let mut playerinfo = PlayerInfo::new();
-        playerinfo.add_player(123)?;
+        playerinfo.add_player(131313)?;
 
-        playerinfo.process_player_info(0).unwrap();
+        let playerinfodata = playerinfo
+            .players
+            .get_mut(0)
+            .context("yes")?
+            .playerinfodata
+            .get_mut(0)
+            .context("yess")?;
+
+        playerinfodata
+            .masks
+            .push(PlayerMask::AppearanceMask(AppearanceMask {
+                gender: 0,
+                skull: false,
+                overhead_prayer: -1,
+                head: 0,
+                cape: 0,
+                neck: 0,
+                weapon: 0,
+                body: 0,
+                shield: 0,
+                is_full_body: false,
+                legs: 36,
+                covers_hair: false,
+                hands: 33,
+                feet: 42,
+                covers_face: false,
+                colors_hair: 0,
+                colors_torso: 0,
+                colors_legs: 0,
+                colors_feet: 0,
+                colors_skin: 0,
+                weapon_stance_stand: 808,
+                weapon_stance_turn: 823,
+                weapon_stance_walk: 819,
+                weapon_stance_turn180: 820,
+                weapon_stance_turn90cw: 821,
+                weapon_stance_turn90ccw: 822,
+                weapon_stance_run: 824,
+                username: "Sage".to_string(),
+                combat_level: 125,
+                skill_id_level: 0,
+                hidden: 0,
+                arms: 26,
+                hair: 0,
+                beard: 10,
+            }));
+
+        playerinfodata
+            .masks
+            .push(PlayerMask::DirectionMask(DirectionMask { direction: 1536 }));
+
+        let vec = playerinfo.process_player_info(0).unwrap();
+
+        println!("Result: {:?}", vec);
 
         Ok(())
     }
