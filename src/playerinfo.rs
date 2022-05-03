@@ -181,7 +181,7 @@ impl PlayerInfo {
             local,
             added,
         );*/
-        main_buf.byte_align()?;
+        //main_buf.byte_align()?;
 
         /*world_player_info(
             world,
@@ -192,7 +192,7 @@ impl PlayerInfo {
             local,
             added,
         );*/
-        main_buf.byte_align()?;
+        //main_buf.byte_align()?;
 
         // Create buffer for sending GPI packet
         let mut send_buffer = ByteBuffer::new(60000);
@@ -202,6 +202,8 @@ impl PlayerInfo {
 
         // Convert the main_buf into a writer
         let mut vec = main_buf.into_writer();
+
+        println!("Vec without mask: {:?}", vec);
 
         // Write the mask_buf's data
         vec.write_all(&mask_buf.data[..mask_buf.write_pos])?;
@@ -376,7 +378,7 @@ impl PlayerInfo {
     }
 }
 
-fn write_mask_update(mask_buf: &mut ByteBuffer, playerinfo: &PlayerInfoData) {
+fn write_mask_update(mask_buf: &mut ByteBuffer, playerinfo: &mut PlayerInfoData) {
     let mut mask: i32 = 0;
 
     // TODO: When assigning masks to players, OR the value of the mask on them instead of this double loop
@@ -505,6 +507,8 @@ fn write_mask_update(mask_buf: &mut ByteBuffer, playerinfo: &PlayerInfoData) {
             }
         }
     }
+
+    playerinfo.masks.clear();
 }
 
 fn remove_local_player(
@@ -802,7 +806,7 @@ mod tests {
 
         let vec = playerinfo.process_player_info(0).unwrap();
 
-        println!("Result: {:?}", vec);
+        println!("Vec with mask: {:?}", vec);
 
         Ok(())
     }
