@@ -110,20 +110,17 @@ impl PlayerInfo {
         let mut local = 0;
         let mut added = 0;
 
-        local += self
-            .local_player_info(player_id, &mut main_buf, &mut mask_buf, UPDATE_GROUP_ACTIVE)
-            .unwrap();
-        main_buf.byte_align().unwrap();
+        local +=
+            self.local_player_info(player_id, &mut main_buf, &mut mask_buf, UPDATE_GROUP_ACTIVE)?;
+        main_buf.byte_align()?;
 
-        local += self
-            .local_player_info(
-                player_id,
-                &mut main_buf,
-                &mut mask_buf,
-                UPDATE_GROUP_INACTIVE,
-            )
-            .unwrap();
-        main_buf.byte_align().unwrap();
+        local += self.local_player_info(
+            player_id,
+            &mut main_buf,
+            &mut mask_buf,
+            UPDATE_GROUP_INACTIVE,
+        )?;
+        main_buf.byte_align()?;
 
         /*added += world_player_info(
             world,
@@ -134,7 +131,7 @@ impl PlayerInfo {
             local,
             added,
         );*/
-        main_buf.byte_align().unwrap();
+        main_buf.byte_align()?;
 
         /*world_player_info(
             world,
@@ -145,19 +142,19 @@ impl PlayerInfo {
             local,
             added,
         );*/
-        main_buf.byte_align().unwrap();
+        main_buf.byte_align()?;
 
         // Create buffer for sending GPI packet
         let mut send_buffer = ByteBuffer::new(60000);
 
         // Align the bitmode to make it byte oriented again
-        main_buf.byte_align().unwrap();
+        main_buf.byte_align()?;
 
         // Convert the main_buf into a writer
         let mut vec = main_buf.into_writer();
 
         // Write the mask_buf's data
-        vec.write_all(&mask_buf.data[..mask_buf.write_pos]).unwrap();
+        vec.write_all(&mask_buf.data[..mask_buf.write_pos])?;
 
         // Now write the bytes to the send_buffer
         send_buffer.write_bytes(&vec);
@@ -504,10 +501,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn add_player_test() {
+    fn add_player_test() -> Result<()> {
         let mut playerinfo = PlayerInfo::new();
-        playerinfo.add_player(123).unwrap();
+        playerinfo.add_player(123)?;
 
         assert_eq!(playerinfo.players.len(), 1);
+
+        Ok(())
     }
 }
