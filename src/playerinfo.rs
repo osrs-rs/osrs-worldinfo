@@ -108,10 +108,10 @@ impl PlayerInfo {
         // Generate the playerinfo data for the given player
         for playerinfo in 0..MAX_PLAYERS {
             if playerinfo_id == playerinfo {
-                self.add_update_record(&mut playerinfoentry, true, coordinates)
+                add_update_record(&mut playerinfoentry, true, coordinates)
                     .expect("failed adding update record for local player");
             }
-            self.add_update_record(&mut playerinfoentry, false, 0)
+            add_update_record(&mut playerinfoentry, false, 0)
                 .expect("failed adding update record for external player");
         }
 
@@ -131,26 +131,6 @@ impl PlayerInfo {
 
     pub fn remove_player(&mut self, key: usize) -> Result<()> {
         self.players.remove(key);
-
-        Ok(())
-    }
-
-    fn add_update_record(
-        &mut self,
-        playerinfo: &mut PlayerInfoEntry,
-        local: bool,
-        coordinates: i32,
-    ) -> Result<()> {
-        playerinfo.playerinfodata.insert(PlayerInfoData {
-            flags: 0,
-            local,
-            coordinates,
-            reset: false,
-            remove_the_local_player: false,
-            masks: Vec::new(),
-            movement_steps: Vec::new(),
-            displaced: false,
-        });
 
         Ok(())
     }
@@ -498,6 +478,25 @@ fn write_skip_count(
         bit_buf.write(2, 3)?;
         bit_buf.write(11, cmp::min(MAX_PLAYERS, skip_count as usize) as u32)?;
     }
+
+    Ok(())
+}
+
+fn add_update_record(
+    playerinfo: &mut PlayerInfoEntry,
+    local: bool,
+    coordinates: i32,
+) -> Result<()> {
+    playerinfo.playerinfodata.insert(PlayerInfoData {
+        flags: 0,
+        local,
+        coordinates,
+        reset: false,
+        remove_the_local_player: false,
+        masks: Vec::new(),
+        movement_steps: Vec::new(),
+        displaced: false,
+    });
 
     Ok(())
 }
