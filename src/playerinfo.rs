@@ -8,7 +8,7 @@ const MAX_PLAYERS: usize = 2047;
 const UPDATE_GROUP_ACTIVE: i32 = 0;
 const UPDATE_GROUP_INACTIVE: i32 = 1;
 
-enum PlayerMasks {}
+enum PlayerMask {}
 
 // An entry for a player, which contains data about all other players
 struct PlayerInfoEntry {
@@ -22,8 +22,9 @@ struct PlayerInfoData {
     coordinates: i32,
     reset: bool,
     remove_the_local_player: bool,
-    masks: Vec<i32>,
+    masks: Vec<PlayerMask>,
     movement_steps: Vec<i32>,
+    displaced: bool,
 }
 
 impl PlayerInfoEntry {
@@ -83,6 +84,7 @@ impl PlayerInfo {
             remove_the_local_player: false,
             masks: Vec::new(),
             movement_steps: Vec::new(),
+            displaced: false,
         });
 
         Ok(())
@@ -95,10 +97,10 @@ impl PlayerInfo {
     }
 
     // Send player information to the player such as appearance etc
-    pub fn process_player_info(&mut self, player_id: usize) {
+    pub fn process_player_info(&mut self, player_id: usize) -> Result<()> {
         // TODO: Remove this, do proper checking instead in the local_player_info and world_player_info places, simply return if the player id does not exist
         if self.players.get(player_id).is_none() {
-            return;
+            return Ok(());
         }
 
         let mut main_buf = BitWriter::endian(Vec::new(), BigEndian);
@@ -164,6 +166,8 @@ impl PlayerInfo {
         for i in 0..MAX_PLAYERS {
             self.group(player_id, i).ok();
         }
+
+        Ok(())
     }
 
     fn local_player_info(
@@ -204,7 +208,7 @@ impl PlayerInfo {
             // Check whether the local player should be removed and turned into a global player
             if playerinfoentryother.remove_the_local_player {
                 playerinfoentryother.reset = true;
-                remove_local_player(bit_buf, player_id, other_player_id);
+                remove_local_player(bit_buf, &playerinfoentryother);
                 continue;
             }
 
@@ -334,22 +338,23 @@ fn write_mask_update(
 
 fn remove_local_player(
     bit_buf: &mut BitWriter<Vec<u8>, bitstream_io::BigEndian>,
-    player_id: usize,
-    target_id: usize,
-) {
+    playerinfo: &PlayerInfoData,
+) -> Result<()> {
     let new_coordinates = 123;
     let record_coordinates = 12311;
 
     let coordinate_change = new_coordinates != record_coordinates;
 
-    bit_buf.write_bit(true).unwrap();
-    bit_buf.write_bit(false).unwrap();
-    bit_buf.write(2, 0).unwrap();
-    bit_buf.write_bit(coordinate_change).unwrap();
+    bit_buf.write_bit(true)?;
+    bit_buf.write_bit(false)?;
+    bit_buf.write(2, 0)?;
+    bit_buf.write_bit(coordinate_change)?;
 
     if coordinate_change {
-        write_coordinate_multiplier(bit_buf, record_coordinates, new_coordinates).unwrap();
+        write_coordinate_multiplier(bit_buf, record_coordinates, new_coordinates)?;
     }
+
+    Ok(())
 }
 
 fn write_coordinate_multiplier(
