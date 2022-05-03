@@ -1,3 +1,4 @@
+use anyhow::Result;
 use bitstream_io::{BigEndian, BitWrite, BitWriter};
 use osrs_buffer::ByteBuffer;
 use slab::Slab;
@@ -42,7 +43,7 @@ impl PlayerInfo {
         }
     }
 
-    pub fn add_player(&mut self, coordinates: i32) -> Result<(), Box<dyn Error>> {
+    pub fn add_player(&mut self, coordinates: i32) -> Result<()> {
         println!("Got a vacant key yo {}", self.players.vacant_key());
 
         // Insert the new player into the slab, retrieve their id
@@ -85,7 +86,7 @@ impl PlayerInfo {
         Ok(())
     }
 
-    pub fn remove_player(&mut self, key: usize) -> Result<(), Box<dyn Error>> {
+    pub fn remove_player(&mut self, key: usize) -> Result<()> {
         self.players.remove(key);
 
         Ok(())
@@ -239,7 +240,7 @@ impl PlayerInfo {
         update_group: i32,
         player_id: usize,
         offset: usize,
-    ) -> Result<i32, Box<dyn Error>> {
+    ) -> Result<i32> {
         let mut count = 0;
 
         for i in offset..MAX_PLAYERS {
@@ -274,7 +275,7 @@ impl PlayerInfo {
         &self,
         bit_buf: &mut BitWriter<Vec<u8>, bitstream_io::BigEndian>,
         skip_count: i32,
-    ) -> Result<(), Box<dyn Error>> {
+    ) -> Result<()> {
         bit_buf.write(1, 0)?;
 
         if skip_count == 0 {
@@ -350,7 +351,7 @@ fn write_coordinate_multiplier(
     bit_buf: &mut BitWriter<Vec<u8>, bitstream_io::BigEndian>,
     old_multiplier: i32,
     new_multiplier: i32,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<()> {
     let current_multiplier_y = new_multiplier & 0xFF;
     let current_multiplier_x = (new_multiplier >> 8) & 0xFF;
     let current_level = (new_multiplier >> 8) & 0x3;
@@ -407,7 +408,7 @@ fn write_local_movement(
     bit_buf: &mut BitWriter<Vec<u8>, bitstream_io::BigEndian>,
     target_id: usize,
     mask_update: bool,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<()> {
     let direction_diff_x = [-1, 0, 1, -1, 1, -1, 0, 1];
     let direction_diff_y = [-1, -1, -1, 0, 0, 1, 1, 1];
 
@@ -481,7 +482,7 @@ fn write_local_movement(
 
 fn write_mask_update_signal(
     bit_buf: &mut BitWriter<Vec<u8>, bitstream_io::BigEndian>,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<()> {
     bit_buf.write(1, 1)?;
     bit_buf.write(2, 0)?;
 
