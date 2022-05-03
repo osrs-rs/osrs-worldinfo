@@ -172,27 +172,25 @@ impl PlayerInfo {
         )?;
         main_buf.byte_align()?;
 
-        /*added += world_player_info(
-            world,
+        added += self.world_player_info(
             player_id,
             &mut main_buf,
             &mut mask_buf,
             UPDATE_GROUP_INACTIVE,
             local,
             added,
-        );*/
-        //main_buf.byte_align()?;
+        )?;
+        main_buf.byte_align()?;
 
-        /*world_player_info(
-            world,
+        self.world_player_info(
             player_id,
             &mut main_buf,
             &mut mask_buf,
             UPDATE_GROUP_ACTIVE,
             local,
             added,
-        );*/
-        //main_buf.byte_align()?;
+        )?;
+        main_buf.byte_align()?;
 
         // Create buffer for sending GPI packet
         let mut send_buffer = ByteBuffer::new(60000);
@@ -327,6 +325,39 @@ impl PlayerInfo {
         Ok(count)
     }
 
+    fn global_skip_count(
+        &mut self,
+        update_group: i32,
+        player_id: usize,
+        offset: usize,
+    ) -> Result<i32> {
+        let mut count = 0;
+
+        for i in offset..MAX_PLAYERS {
+            // Grab the playerinfo
+            let playerinfoentryother = self
+                .players
+                .get_mut(player_id)
+                .unwrap()
+                .playerinfodata
+                .get_mut(i)
+                .unwrap();
+
+            // Return if the playerinfo is not in this group
+            if !(!playerinfoentryother.local && (update_group & 0x1) == playerinfoentryother.flags)
+            {
+                continue;
+            }
+
+            // Check here if a player needs to be added, aka they are within view distance. Simply pass over a mask
+
+            // Increment the skip count by 1
+            count += 1;
+        }
+
+        Ok(count)
+    }
+
     fn write_skip_count(
         &self,
         bit_buf: &mut BitWriter<Vec<u8>, bitstream_io::BigEndian>,
@@ -375,6 +406,90 @@ impl PlayerInfo {
         }
 
         Ok(())
+    }
+
+    fn world_player_info(
+        &mut self,
+        player_id: usize,
+        bit_buf: &mut BitWriter<Vec<u8>, bitstream_io::BigEndian>,
+        mask_buf: &mut ByteBuffer,
+        update_group: i32,
+        local_count: i32,
+        previously_added: i32,
+    ) -> Result<i32> {
+        let mut added = 0;
+        let mut skip_count = 0;
+
+        let max_player_additions_per_cycle = 40;
+        let max_local_players = 255;
+
+        for other_player_id in 0..MAX_PLAYERS {
+            // Grab the playerinfo
+            let playerinfoentryother = self
+                .players
+                .get_mut(player_id)
+                .unwrap()
+                .playerinfodata
+                .get_mut(other_player_id)
+                .unwrap();
+
+            // Test whether the playerinfo is ocal, and whether it is in the correct update group (active, inactive)
+            if !(!playerinfoentryother.local && (update_group & 0x1) == playerinfoentryother.flags)
+            {
+                continue;
+            }
+
+            // Check whether entries should be skipped
+            if skip_count > 0 {
+                skip_count -= 1;
+                playerinfoentryother.flags |= 0x2;
+                continue;
+            }
+
+            /*if world.players.get(i).is_some() {
+                let capacity_reached = added + previously_added >= max_player_additions_per_cycle
+                    || local_count >= max_local_players;
+
+                if player_can_view_other_player(world, player_id, i) && !capacity_reached {
+                    write_player_addition(bit_buf, world, player_id, i).unwrap();
+                    write_new_player_masks(mask_buf, world, i);
+                    *get_update_record_flags(world, player_id, i) |= 0x2;
+
+                    // Set local to true
+                    *world
+                        .players
+                        .get_mut(player_id)
+                        .unwrap()
+                        .update_record_local
+                        .get_mut(i)
+                        .unwrap() = true;
+
+                    // Set the coordinate to the player's coordinate
+                    *world
+                        .players
+                        .get_mut(player_id)
+                        .unwrap()
+                        .update_record_coordinates
+                        .get_mut(i)
+                        .unwrap() = world
+                        .players
+                        .get(i)
+                        .unwrap()
+                        .coordinates
+                        .get_packed_18_bits();
+
+                    // need it as packed 18 bits here instead of just .coords. consider making function: get_coords_as_18_bit(coords);
+                    added += 1;
+                }
+                continue;
+            }*/
+
+            playerinfoentryother.flags |= 0x2;
+            skip_count = self.global_skip_count(update_group, player_id, other_player_id + 1)?;
+            self.write_skip_count(bit_buf, skip_count).ok();
+        }
+
+        Ok(0)
     }
 }
 
