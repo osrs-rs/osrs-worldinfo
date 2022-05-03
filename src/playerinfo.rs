@@ -161,7 +161,7 @@ impl PlayerInfo {
         )?;
         main_buf.byte_align()?;
 
-        added += self.world_player_info(
+        added += self.global_player_info(
             player_id,
             &mut main_buf,
             &mut mask_buf,
@@ -171,7 +171,7 @@ impl PlayerInfo {
         )?;
         main_buf.byte_align()?;
 
-        self.world_player_info(
+        self.global_player_info(
             player_id,
             &mut main_buf,
             &mut mask_buf,
@@ -370,7 +370,7 @@ impl PlayerInfo {
         Ok(())
     }
 
-    fn world_player_info(
+    fn global_player_info(
         &mut self,
         player_id: usize,
         bit_buf: &mut BitWriter<Vec<u8>, bitstream_io::BigEndian>,
