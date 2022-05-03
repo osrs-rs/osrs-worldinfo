@@ -851,6 +851,11 @@ fn write_appearance_mask(appearance_mask: &AppearanceMask, mask_buf: &mut ByteBu
 
 #[cfg(test)]
 mod tests {
+    use std::{
+        collections::hash_map::DefaultHasher,
+        hash::{Hash, Hasher},
+    };
+
     use super::*;
 
     #[test]
@@ -922,6 +927,10 @@ mod tests {
         let vec = playerinfo.process_player_info(0)?;
 
         println!("Vec with mask: {:?}", vec);
+
+        let mut s = DefaultHasher::new();
+        vec.hash(&mut s);
+        assert_eq!(s.finish(), 9926834204379934435);
 
         let vec = playerinfo.process_player_info(0)?;
 
