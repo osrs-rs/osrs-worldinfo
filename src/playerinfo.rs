@@ -398,7 +398,7 @@ impl PlayerInfo {
         // Shift its flags
         playerinfoentryother.flags >>= 1;
 
-        // If reset is set, reset the playerinfo
+        // Check whether the playerinfoentry should be reset
         if playerinfoentryother.reset {
             playerinfoentryother.flags = 0;
             playerinfoentryother.coordinates = 0;
