@@ -184,9 +184,6 @@ impl PlayerInfo {
         // Create buffer for sending GPI packet
         let mut send_buffer = ByteBuffer::new(60000);
 
-        // Align the bitmode to make it byte oriented again
-        main_buf.byte_align()?;
-
         // Convert the main_buf into a writer
         let mut vec = main_buf.into_writer();
 
