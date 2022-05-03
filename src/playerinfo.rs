@@ -93,36 +93,40 @@ impl PlayerInfo {
     }
 
     pub fn add_player(&mut self, coordinates: i32) -> Result<()> {
-        println!("Got a vacant key yo {}", self.players.vacant_key());
+        // Get the playerinfo id using a vacant key, check for exceeding limit
+        let playerinfo_id = self.players.vacant_key();
+        if playerinfo_id > MAX_PLAYERS {
+            return Err(anyhow!(
+                "Maximum amount of players processable by PlayerInfo reached"
+            ));
+        }
 
-        // Insert the new player into the slab, retrieve their id
-        let playerinfo_id = self.players.insert(PlayerInfoEntry::new());
+        // Create a new playerinfo entry
+        let mut playerinfoentry = PlayerInfoEntry::new();
 
-        // Generate the playerinfo for the given player
+        // Generate the playerinfo data for the given player
         for playerinfo in 0..MAX_PLAYERS {
             if playerinfo_id == playerinfo {
-                self.add_update_record(playerinfo_id, true, coordinates)
+                self.add_update_record(&mut playerinfoentry, true, coordinates)
                     .expect("failed adding update record for local player");
             }
-            self.add_update_record(playerinfo_id, false, 0)
+            self.add_update_record(&mut playerinfoentry, false, 0)
                 .expect("failed adding update record for external player");
         }
+
+        // Insert the PlayerInfoEntry
+        self.players.insert(playerinfoentry);
 
         Ok(())
     }
 
     fn add_update_record(
         &mut self,
-        playerinfo_id: usize,
+        playerinfo: &mut PlayerInfoEntry,
         local: bool,
         coordinates: i32,
     ) -> Result<()> {
-        let playerinfoentry = self
-            .players
-            .get_mut(playerinfo_id)
-            .context("failed getting playerinfoentry")?;
-
-        playerinfoentry.playerinfodata.insert(PlayerInfoData {
+        playerinfo.playerinfodata.insert(PlayerInfoData {
             flags: 0,
             local,
             coordinates,
