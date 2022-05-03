@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use bitstream_io::{BigEndian, BitWrite, BitWriter};
 use osrs_buffer::ByteBuffer;
 use slab::Slab;
@@ -69,11 +69,11 @@ impl PlayerInfo {
         playerinfo_id: usize,
         local: bool,
         coordinates: i32,
-    ) -> Result<(), Box<dyn Error>> {
+    ) -> Result<()> {
         let playerinfoentry = self
             .players
             .get_mut(playerinfo_id)
-            .ok_or("failed getting playerinfoentry")?;
+            .context("failed getting playerinfoentry")?;
 
         playerinfoentry.playerinfodata.insert(PlayerInfoData {
             flags: 0,
@@ -172,7 +172,7 @@ impl PlayerInfo {
         bit_buf: &mut BitWriter<Vec<u8>, bitstream_io::BigEndian>,
         mask_buf: &mut ByteBuffer,
         update_group: i32,
-    ) -> Result<i32, Box<dyn Error>> {
+    ) -> Result<i32> {
         let mut skip_count = 0;
         let mut local_players = 0;
 
@@ -299,14 +299,14 @@ impl PlayerInfo {
         Ok(())
     }
 
-    fn group(&mut self, player_id: usize, index: usize) -> Result<(), Box<dyn Error>> {
+    fn group(&mut self, player_id: usize, index: usize) -> Result<()> {
         let playerinfoentryother = self
             .players
             .get_mut(player_id)
-            .ok_or("failed getting playerinfoentry")?
+            .context("failed getting playerinfoentry")?
             .playerinfodata
             .get_mut(index)
-            .ok_or("failed playerinfoother")?;
+            .context("failed playerinfoother")?;
 
         playerinfoentryother.flags >>= 1;
 
