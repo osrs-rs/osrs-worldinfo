@@ -2,13 +2,59 @@ use anyhow::{anyhow, Context, Result};
 use bitstream_io::{BigEndian, BitWrite, BitWriter};
 use osrs_buffer::ByteBuffer;
 use slab::Slab;
-use std::{cmp, error::Error, io::Write};
+use std::{cmp, io::Write};
 
 const MAX_PLAYERS: usize = 2047;
 const UPDATE_GROUP_ACTIVE: i32 = 0;
 const UPDATE_GROUP_INACTIVE: i32 = 1;
 
-enum PlayerMask {}
+pub enum PlayerMask {
+    AppearanceMask(AppearanceMask),
+    DirectionMask(DirectionMask),
+}
+
+pub struct AppearanceMask {
+    pub gender: i8,
+    pub skull: bool,
+    pub overhead_prayer: i8,
+    //pub npc: i32,
+    //pub looks: PlayerLooks,
+    pub head: i16,
+    pub cape: i16,
+    pub neck: i16,
+    pub weapon: i16,
+    pub body: i16,
+    pub shield: i16,
+    pub arms: i16,
+    pub is_full_body: bool,
+    pub legs: i16,
+    pub hair: i16,
+    pub covers_hair: bool,
+    pub hands: i16,
+    pub feet: i16,
+    pub covers_face: bool,
+    pub beard: i16,
+    pub colors_hair: i8,
+    pub colors_torso: i8,
+    pub colors_legs: i8,
+    pub colors_feet: i8,
+    pub colors_skin: i8,
+    pub weapon_stance_stand: i16,
+    pub weapon_stance_turn: i16,
+    pub weapon_stance_walk: i16,
+    pub weapon_stance_turn180: i16,
+    pub weapon_stance_turn90cw: i16,
+    pub weapon_stance_turn90ccw: i16,
+    pub weapon_stance_run: i16,
+    pub username: String,
+    pub combat_level: i8,
+    pub skill_id_level: i16,
+    pub hidden: i8,
+}
+
+pub struct DirectionMask {
+    pub direction: i16,
+}
 
 // An entry for a player, which contains data about all other players
 struct PlayerInfoEntry {
@@ -205,13 +251,14 @@ impl PlayerInfo {
             // Check whether the local player should be removed and turned into a global player
             if playerinfoentryother.remove_the_local_player {
                 playerinfoentryother.reset = true;
-                remove_local_player(bit_buf, &playerinfoentryother);
+                remove_local_player(bit_buf, &playerinfoentryother)?;
                 continue;
             }
 
             // Determine whether there is mask and movement updates
             let mask_update = !playerinfoentryother.masks.is_empty();
-            let move_update = !playerinfoentryother.movement_steps.is_empty();
+            let move_update =
+                !playerinfoentryother.movement_steps.is_empty() || playerinfoentryother.displaced;
 
             // If there is a mask update, write them out
             if mask_update {
