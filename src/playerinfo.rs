@@ -209,8 +209,8 @@ impl PlayerInfo {
             }
 
             // Determine whether there is mask and movement updates
-            let mask_update = playerinfoentryother.masks.len() > 0;
-            let move_update = playerinfoentryother.movement_steps.len() > 0;
+            let mask_update = !playerinfoentryother.masks.is_empty();
+            let move_update = !playerinfoentryother.movement_steps.is_empty();
 
             // If there is a mask update, write them out
             if mask_update {
