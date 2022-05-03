@@ -262,7 +262,7 @@ impl PlayerInfo {
 
             // If there is a mask update, write them out
             if mask_update {
-                write_mask_update(mask_buf, playerinfoentryother, other_player_id, 1);
+                write_mask_update(mask_buf, playerinfoentryother);
             }
 
             // If there is either a mask or movement update, write a bit signifying so
@@ -372,12 +372,135 @@ impl PlayerInfo {
     }
 }
 
-fn write_mask_update(
-    mask_buf: &mut ByteBuffer,
-    playerinfo: &PlayerInfoData,
-    target_id: usize,
-    mask_packets: i32,
-) {
+fn write_mask_update(mask_buf: &mut ByteBuffer, playerinfo: &PlayerInfoData) {
+    let mut mask: i32 = 0;
+
+    // TODO: When assigning masks to players, OR the value of the mask on them instead of this double loop
+    for mask_order in 0..=11 {
+        for record in playerinfo.masks.iter() {
+            match mask_order {
+                0 => match record {
+                    // Movement forced
+                    _ => (),
+                },
+                1 => match record {
+                    // Spot animation
+                    _ => (),
+                },
+                2 => match record {
+                    // Sequence
+                    _ => (),
+                },
+                3 => match record {
+                    PlayerMask::AppearanceMask(p) => {
+                        mask |= 0x2;
+                    }
+                    _ => (),
+                },
+                4 => match record {
+                    // Shout
+                    _ => (),
+                },
+                5 => match record {
+                    // Lock turn to
+                    _ => (),
+                },
+                6 => match record {
+                    // Movement cached
+                    _ => (),
+                },
+                7 => match record {
+                    // Chat
+                    _ => (),
+                },
+                8 => match record {
+                    // Name modifiers
+                    _ => (),
+                },
+                9 => match record {
+                    // Hit
+                    _ => (),
+                },
+                10 => match record {
+                    // Movement temporary
+                    _ => (),
+                },
+                11 => match record {
+                    PlayerMask::DirectionMask(p) => {
+                        mask |= 0x8;
+                    }
+                    _ => (),
+                },
+                _ => (),
+            }
+        }
+    }
+
+    // TODO: Calculate mask as playermasks are set instead of doing this double iteration
+    if mask >= 0xFF {
+        mask_buf.write_i8((mask | 0x40) as i8);
+        mask_buf.write_i8((mask >> 8) as i8);
+    } else {
+        mask_buf.write_i8(mask as i8);
+    }
+
+    // Now write masks
+    for mask_order in 0..=11 {
+        // TODO: Consider if this should be mutable. Very likely it won't need to be
+        for record in playerinfo.masks.iter() {
+            match mask_order {
+                0 => match record {
+                    // Movement forced
+                    _ => (),
+                },
+                1 => match record {
+                    // Spot animation
+                    _ => (),
+                },
+                2 => match record {
+                    // Sequence
+                    _ => (),
+                },
+                3 => match record {
+                    PlayerMask::AppearanceMask(p) => write_appearance_mask(&p, mask_buf),
+                    _ => (),
+                },
+                4 => match record {
+                    // Shout
+                    _ => (),
+                },
+                5 => match record {
+                    // Lock turn to
+                    _ => (),
+                },
+                6 => match record {
+                    // Movement cached
+                    _ => (),
+                },
+                7 => match record {
+                    // Chat
+                    _ => (),
+                },
+                8 => match record {
+                    // Name modifiers
+                    _ => (),
+                },
+                9 => match record {
+                    // Hit
+                    _ => (),
+                },
+                10 => match record {
+                    // Movement temporary
+                    _ => (),
+                },
+                11 => match record {
+                    PlayerMask::DirectionMask(p) => write_direction_mask(&p, mask_buf),
+                    _ => (),
+                },
+                _ => (),
+            }
+        }
+    }
 }
 
 fn remove_local_player(
@@ -543,6 +666,66 @@ fn write_mask_update_signal(
     Ok(())
 }
 
+fn write_direction_mask(direction_mask: &DirectionMask, mask_buf: &mut ByteBuffer) {
+    mask_buf.write_i16_add(direction_mask.direction);
+}
+
+fn write_appearance_mask(appearance_mask: &AppearanceMask, mask_buf: &mut ByteBuffer) {
+    let mut temp_buf: ByteBuffer = ByteBuffer::new(200);
+
+    temp_buf.write_i8(appearance_mask.gender);
+    if appearance_mask.skull {
+        temp_buf.write_i8(1)
+    } else {
+        temp_buf.write_i8(-1)
+    }
+
+    temp_buf.write_i8(appearance_mask.overhead_prayer);
+
+    // Equipment here, skipped for now
+    temp_buf.write_i8(0); // Head
+    temp_buf.write_i8(0); // Cape
+    temp_buf.write_i8(0); // Neck
+    temp_buf.write_i8(0); // Weapon
+
+    temp_buf.write_i16(256 + 18); // Torso
+    temp_buf.write_i8(0); // Shield
+    temp_buf.write_i16(256 + appearance_mask.arms); // Arms
+    temp_buf.write_i16(256 + appearance_mask.legs); // Legs
+    temp_buf.write_i16(256 + appearance_mask.hair); // Hair
+    temp_buf.write_i16(256 + appearance_mask.hands); // Hands
+    temp_buf.write_i16(256 + appearance_mask.feet); // Feet
+
+    if appearance_mask.gender == 0 {
+        temp_buf.write_i16(256 + appearance_mask.beard); // Beard
+    } else {
+        temp_buf.write_i16(0);
+    }
+
+    temp_buf.write_i8(appearance_mask.colors_hair);
+    temp_buf.write_i8(appearance_mask.colors_torso);
+    temp_buf.write_i8(appearance_mask.colors_legs);
+    temp_buf.write_i8(appearance_mask.colors_feet);
+    temp_buf.write_i8(appearance_mask.colors_skin);
+
+    temp_buf.write_i16(appearance_mask.weapon_stance_stand);
+    temp_buf.write_i16(appearance_mask.weapon_stance_turn);
+    temp_buf.write_i16(appearance_mask.weapon_stance_walk);
+    temp_buf.write_i16(appearance_mask.weapon_stance_turn180);
+    temp_buf.write_i16(appearance_mask.weapon_stance_turn90cw);
+    temp_buf.write_i16(appearance_mask.weapon_stance_turn90ccw);
+    temp_buf.write_i16(appearance_mask.weapon_stance_run);
+
+    temp_buf.write_string_null_terminated(&appearance_mask.username);
+    temp_buf.write_i8(appearance_mask.combat_level);
+    temp_buf.write_i16(appearance_mask.skill_id_level);
+    temp_buf.write_i8(appearance_mask.hidden);
+
+    mask_buf.write_i8(temp_buf.write_pos as i8);
+
+    mask_buf.write_bytes_reversed_add(&temp_buf);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -553,6 +736,16 @@ mod tests {
         playerinfo.add_player(123)?;
 
         assert_eq!(playerinfo.players.len(), 1);
+
+        Ok(())
+    }
+
+    #[test]
+    fn playerinfo_test() -> Result<()> {
+        let mut playerinfo = PlayerInfo::new();
+        playerinfo.add_player(123)?;
+
+        playerinfo.process_player_info(0).unwrap();
 
         Ok(())
     }
