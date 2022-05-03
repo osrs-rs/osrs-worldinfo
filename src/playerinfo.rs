@@ -300,6 +300,7 @@ impl PlayerInfo {
     }
 
     fn group(&mut self, player_id: usize, index: usize) -> Result<()> {
+        // Get the playerinfo
         let playerinfoentryother = self
             .players
             .get_mut(player_id)
@@ -308,8 +309,10 @@ impl PlayerInfo {
             .get_mut(index)
             .context("failed playerinfoother")?;
 
+        // Shift its flags
         playerinfoentryother.flags >>= 1;
 
+        // If reset is set, reset the playerinfo
         if playerinfoentryother.reset {
             playerinfoentryother.flags = 0;
             playerinfoentryother.coordinates = 0;
