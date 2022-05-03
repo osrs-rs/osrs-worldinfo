@@ -149,6 +149,7 @@ impl PlayerInfo {
         let mut local = 0;
         let mut added = 0;
 
+        // Write local player data (players around the player)
         local +=
             self.local_player_info(player_id, &mut main_buf, &mut mask_buf, UPDATE_GROUP_ACTIVE)?;
         main_buf.byte_align()?;
@@ -161,6 +162,7 @@ impl PlayerInfo {
         )?;
         main_buf.byte_align()?;
 
+        // Write global player data (players that the player cannot see)
         added += self.global_player_info(
             player_id,
             &mut main_buf,
@@ -181,23 +183,18 @@ impl PlayerInfo {
         )?;
         main_buf.byte_align()?;
 
-        // Create buffer for sending GPI packet
-        let mut send_buffer = ByteBuffer::new(60000);
-
         // Convert the main_buf into a writer
         let mut vec = main_buf.into_writer();
 
         // Write the mask_buf's data
         vec.write_all(&mask_buf.data[..mask_buf.write_pos])?;
 
-        // Now write the bytes to the send_buffer
-        send_buffer.write_bytes(&vec);
-
         // Group the records
         for i in 0..MAX_PLAYERS {
             self.group(player_id, i).ok();
         }
 
+        // Return the bit buffer including the mask buffer
         Ok(vec)
     }
 
