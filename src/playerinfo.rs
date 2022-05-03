@@ -202,8 +202,6 @@ impl PlayerInfo {
         // Convert the main_buf into a writer
         let mut vec = main_buf.into_writer();
 
-        println!("Vec without mask: {:?}", vec);
-
         // Write the mask_buf's data
         vec.write_all(&mask_buf.data[..mask_buf.write_pos])?;
 
@@ -447,6 +445,7 @@ impl PlayerInfo {
                 continue;
             }
 
+            // TODO: Make some Option type here for that a player should be added
             /*if world.players.get(i).is_some() {
                 let capacity_reached = added + previously_added >= max_player_additions_per_cycle
                     || local_count >= max_local_players;
@@ -919,6 +918,10 @@ mod tests {
         playerinfodata
             .masks
             .push(PlayerMask::DirectionMask(DirectionMask { direction: 1536 }));
+
+        let vec = playerinfo.process_player_info(0)?;
+
+        println!("Vec with mask: {:?}", vec);
 
         let vec = playerinfo.process_player_info(0)?;
 
