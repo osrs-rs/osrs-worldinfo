@@ -509,7 +509,7 @@ fn write_mask_update(mask_buf: &mut ByteBuffer, playerinfo: &mut PlayerInfoData)
                     _ => (),
                 },
                 3 => match record {
-                    PlayerMask::AppearanceMask(p) => {
+                    PlayerMask::AppearanceMask(_p) => {
                         mask |= 0x2;
                     }
                     _ => (),
@@ -543,7 +543,7 @@ fn write_mask_update(mask_buf: &mut ByteBuffer, playerinfo: &mut PlayerInfoData)
                     _ => (),
                 },
                 11 => match record {
-                    PlayerMask::DirectionMask(p) => {
+                    PlayerMask::DirectionMask(_p) => {
                         mask |= 0x8;
                     }
                     _ => (),
