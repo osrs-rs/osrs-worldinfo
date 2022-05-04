@@ -154,15 +154,11 @@ impl PlayerInfo {
         // Supply the mask buffer instead, as to prevent this big ass allocation
         let mut mask_buf = ByteBuffer::new(60000);
 
-        let mut local = 0;
-        let mut added = 0;
-
         // Write local player data (players around the player)
-        local +=
-            self.local_player_info(player_id, &mut main_buf, &mut mask_buf, UPDATE_GROUP_ACTIVE)?;
+        self.local_player_info(player_id, &mut main_buf, &mut mask_buf, UPDATE_GROUP_ACTIVE)?;
         main_buf.byte_align()?;
 
-        local += self.local_player_info(
+        self.local_player_info(
             player_id,
             &mut main_buf,
             &mut mask_buf,
@@ -171,24 +167,15 @@ impl PlayerInfo {
         main_buf.byte_align()?;
 
         // Write global player data (players that the player cannot see)
-        added += self.global_player_info(
-            player_id,
-            &mut main_buf,
-            &mut mask_buf,
-            UPDATE_GROUP_INACTIVE,
-            local,
-            added,
-        )?;
-        main_buf.byte_align()?;
-
         self.global_player_info(
             player_id,
             &mut main_buf,
             &mut mask_buf,
-            UPDATE_GROUP_ACTIVE,
-            local,
-            added,
+            UPDATE_GROUP_INACTIVE,
         )?;
+        main_buf.byte_align()?;
+
+        self.global_player_info(player_id, &mut main_buf, &mut mask_buf, UPDATE_GROUP_ACTIVE)?;
         main_buf.byte_align()?;
 
         // Convert the main_buf into a writer
@@ -378,14 +365,8 @@ impl PlayerInfo {
         bit_buf: &mut BitWriter<Vec<u8>, bitstream_io::BigEndian>,
         mask_buf: &mut ByteBuffer,
         update_group: i32,
-        local_count: i32,
-        previously_added: i32,
     ) -> Result<i32> {
-        let mut added = 0;
         let mut skip_count = 0;
-
-        let max_player_additions_per_cycle = 40;
-        let max_local_players = 255;
 
         for other_player_id in 0..MAX_PLAYERS {
             // Grab the playerinfo
@@ -397,7 +378,7 @@ impl PlayerInfo {
                 .get_mut(other_player_id)
                 .context("failed 2")?;
 
-            // Test whether the playerinfo is ocal, and whether it is in the correct update group (active, inactive)
+            // Test whether the playerinfo is global, and whether it is in the correct update group (active, inactive)
             if !(!playerinfoentryother.local && (update_group & 0x1) == playerinfoentryother.flags)
             {
                 continue;
