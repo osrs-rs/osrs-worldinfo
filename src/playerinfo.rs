@@ -76,7 +76,7 @@ struct PlayerInfoData {
     reset: bool,
     remove_the_local_player: bool,
     masks: Vec<PlayerMask>,
-    movement_steps: Vec<i32>,
+    movement_steps: Vec<(i32, i32)>,
     displaced: bool,
     movement_update: MovementUpdate,
 }
@@ -717,7 +717,7 @@ fn write_coordinate_multiplier(
 
 fn write_local_movement(
     bit_buf: &mut BitWriter<Vec<u8>, bitstream_io::BigEndian>,
-    playerinfoentry: &PlayerInfoData,
+    playerinfoentry: &mut PlayerInfoData,
     mask_update: bool,
 ) -> Result<()> {
     let direction_diff_x = [-1, 0, 1, -1, 1, -1, 0, 1];
@@ -744,22 +744,26 @@ fn write_local_movement(
             bit_buf.write(5, movement_update.y & 0x1F)?;
         }
     } else {
-        /*let steps = &mut world.players.get_mut(target_id)?.movement_queue.next_steps;
-        let walk_step = steps.get(0)?;
-        let walk_rotation = get_direction_rotation(&walk_step.dir);
+        let movement_steps = &mut playerinfoentry.movement_steps;
+        let walk_step = movement_steps.get(0).context("failed getting walk step")?;
+        let walk_rotation = get_direction_rotation(walk_step)?;
 
-        let mut dx = *direction_diff_x.get(walk_rotation as usize)?;
-        let mut dy = *direction_diff_y.get(walk_rotation as usize)?;
+        let mut dx = *direction_diff_x.get(walk_rotation as usize).context("dx")?;
+        let mut dy = *direction_diff_y.get(walk_rotation as usize).context("dy")?;
 
         let mut running = false;
         let mut direction = 0;
 
-        if let Some(run_step) = steps.get(1) {
+        if let Some(run_step) = movement_steps.get(1) {
             println!("WHY ARE YOU RUNNING 2");
-            let run_rotation = get_direction_rotation(&run_step.dir);
+            let run_rotation = get_direction_rotation(&run_step)?;
 
-            dx += *direction_diff_x.get(run_rotation as usize)?;
-            dy += *direction_diff_y.get(run_rotation as usize)?;
+            dx += *direction_diff_x
+                .get(run_rotation as usize)
+                .context("dx 2")?;
+            dy += *direction_diff_y
+                .get(run_rotation as usize)
+                .context("dy 2")?;
 
             if let Some(run_dir) = run_dir(dx, dy) {
                 direction = run_dir;
@@ -774,14 +778,14 @@ fn write_local_movement(
         }
 
         if running {
-            bit_buf.write(2, 2).ok()?;
-            bit_buf.write(4, direction).ok()?;
+            bit_buf.write(2, 2)?;
+            bit_buf.write(4, direction)?;
         } else {
-            bit_buf.write(2, 1).ok()?;
-            bit_buf.write(3, direction).ok()?;
+            bit_buf.write(2, 1)?;
+            bit_buf.write(3, direction)?;
         }
 
-        steps.clear();*/
+        movement_steps.clear();
     }
 
     Ok(())
@@ -854,6 +858,56 @@ fn write_appearance_mask(appearance_mask: &AppearanceMask, mask_buf: &mut ByteBu
     mask_buf.write_i8(temp_buf.write_pos as i8);
 
     mask_buf.write_bytes_reversed_add(&temp_buf);
+}
+
+fn get_direction_rotation(some_movement: &(i32, i32)) -> Result<i32> {
+    match some_movement {
+        (-1, -1) => Ok(0),
+        (0, -1) => Ok(1),
+        (1, -1) => Ok(2),
+        (-1, 0) => Ok(3),
+        (1, 0) => Ok(4),
+        (-1, 1) => Ok(5),
+        (0, 1) => Ok(6),
+        (1, 1) => Ok(7),
+        _ => Err(anyhow!("Failed getting direction rotation")),
+    }
+}
+
+fn run_dir(dx: i32, dy: i32) -> Option<i32> {
+    match (dx, dy) {
+        (-2, -2) => Some(0),
+        (-1, -2) => Some(1),
+        (0, -2) => Some(2),
+        (1, -2) => Some(3),
+        (2, -2) => Some(4),
+        (-2, -1) => Some(5),
+        (2, -1) => Some(6),
+        (-2, 0) => Some(7),
+        (2, 0) => Some(8),
+        (-2, 1) => Some(9),
+        (2, 1) => Some(10),
+        (-2, 2) => Some(11),
+        (-1, 2) => Some(12),
+        (0, 2) => Some(13),
+        (1, 2) => Some(14),
+        (2, 2) => Some(15),
+        _ => None,
+    }
+}
+
+fn walk_dir(dx: i32, dy: i32) -> Option<i32> {
+    match (dx, dy) {
+        (-1, -1) => Some(0),
+        (0, -1) => Some(1),
+        (1, -1) => Some(2),
+        (-1, 0) => Some(3),
+        (1, 0) => Some(4),
+        (-1, 1) => Some(5),
+        (0, 1) => Some(6),
+        (1, 1) => Some(7),
+        _ => None,
+    }
 }
 
 #[cfg(test)]
