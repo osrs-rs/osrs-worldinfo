@@ -14,6 +14,8 @@ const LOCAL_MOVEMENT_WALK: i32 = 1;
 const LOCAL_MOVEMENT_RUN: i32 = 2;
 const LOCAL_MOVEMENT_TELEPORT: i32 = 3;
 
+const LOCAL_PLAYER_UPDATE_REQUIRED: bool = true;
+
 struct MovementUpdate {
     x: i32,
     y: i32,
@@ -250,9 +252,9 @@ impl PlayerInfo {
                 write_mask_update(mask_buf, playerinfoentryother);
             }
 
-            // If there is either a mask or movement update, write a bit signifying so
+            // If there is either a mask or movement update, write true signifying that the player needs an update
             if mask_update || move_update {
-                bit_buf.write_bit(true)?;
+                bit_buf.write_bit(LOCAL_PLAYER_UPDATE_REQUIRED)?;
             }
 
             if move_update {
