@@ -206,9 +206,8 @@ impl PlayerInfo {
         bit_buf: &mut BitWriter<Vec<u8>, bitstream_io::BigEndian>,
         mask_buf: &mut ByteBuffer,
         update_group: i32,
-    ) -> Result<i32> {
+    ) -> Result<()> {
         let mut skip_count = 0;
-        let mut local_players = 0;
 
         for other_player_id in 0..MAX_PLAYERS {
             // Grab the playerinfo
@@ -231,9 +230,6 @@ impl PlayerInfo {
                 playerinfoentryother.flags |= 0x2;
                 continue;
             }
-
-            // Increment the local players by 1
-            local_players += 1;
 
             // Check whether the local player should be removed and turned into a global player
             if playerinfoentryother.remove_the_local_player {
@@ -270,7 +266,7 @@ impl PlayerInfo {
             }
         }
 
-        Ok(local_players)
+        Ok(())
     }
 
     fn get_local_skip_count(
