@@ -9,6 +9,11 @@ const UPDATE_GROUP_ACTIVE: i32 = 0;
 const UPDATE_GROUP_INACTIVE: i32 = 1;
 const REBUILD_BOUNDARY: i32 = 16;
 
+const LOCAL_MOVEMENT_NONE: i32 = 0;
+const LOCAL_MOVEMENT_WALK: i32 = 1;
+const LOCAL_MOVEMENT_RUN: i32 = 2;
+const LOCAL_MOVEMENT_TELEPORT: i32 = 3;
+
 struct MovementUpdate {
     x: i32,
     y: i32,
@@ -713,7 +718,7 @@ fn write_local_movement(
     bit_buf.write_bit(mask_update)?;
     if teleport {
         // SKIP TELEPORT FOR NOW
-        bit_buf.write(2, 3)?;
+        bit_buf.write(2, LOCAL_MOVEMENT_TELEPORT)?;
         bit_buf.write_bit(large_change)?;
         bit_buf.write(2, movement_update.z & 0x3)?;
 
@@ -758,10 +763,10 @@ fn write_local_movement(
         }
 
         if running {
-            bit_buf.write(2, 2)?;
+            bit_buf.write(2, LOCAL_MOVEMENT_RUN)?;
             bit_buf.write(4, direction)?;
         } else {
-            bit_buf.write(2, 1)?;
+            bit_buf.write(2, LOCAL_MOVEMENT_WALK)?;
             bit_buf.write(3, direction)?;
         }
 
@@ -775,7 +780,7 @@ fn write_mask_update_signal(
     bit_buf: &mut BitWriter<Vec<u8>, bitstream_io::BigEndian>,
 ) -> Result<()> {
     bit_buf.write(1, 1)?;
-    bit_buf.write(2, 0)?;
+    bit_buf.write(2, LOCAL_MOVEMENT_NONE)?;
 
     Ok(())
 }
