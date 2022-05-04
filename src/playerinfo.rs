@@ -7,6 +7,13 @@ use std::{cmp, io::Write};
 const MAX_PLAYERS: usize = 2047;
 const UPDATE_GROUP_ACTIVE: i32 = 0;
 const UPDATE_GROUP_INACTIVE: i32 = 1;
+const REBUILD_BOUNDARY: i32 = 16;
+
+struct MovementUpdate {
+    x: i32,
+    y: i32,
+    z: i32,
+}
 
 pub enum PlayerMask {
     AppearanceMask(AppearanceMask),
@@ -71,6 +78,7 @@ struct PlayerInfoData {
     masks: Vec<PlayerMask>,
     movement_steps: Vec<i32>,
     displaced: bool,
+    movement_update: MovementUpdate,
 }
 
 impl PlayerInfoEntry {
@@ -256,7 +264,7 @@ impl PlayerInfo {
             }
 
             if move_update {
-                write_local_movement(bit_buf, other_player_id, mask_update)
+                write_local_movement(bit_buf, playerinfoentryother, mask_update)
                     .expect("failed writing local movement");
             } else if mask_update {
                 write_mask_update_signal(bit_buf).expect("failed writing mask update signal");
@@ -490,6 +498,7 @@ fn add_update_record(
         masks: Vec::new(),
         movement_steps: Vec::new(),
         displaced: false,
+        movement_update: MovementUpdate { x: 0, y: 0, z: 0 },
     });
 
     Ok(())
@@ -708,20 +717,16 @@ fn write_coordinate_multiplier(
 
 fn write_local_movement(
     bit_buf: &mut BitWriter<Vec<u8>, bitstream_io::BigEndian>,
-    target_id: usize,
+    playerinfoentry: &PlayerInfoData,
     mask_update: bool,
 ) -> Result<()> {
     let direction_diff_x = [-1, 0, 1, -1, 1, -1, 0, 1];
     let direction_diff_y = [-1, -1, -1, 0, 0, 1, 1, 1];
 
-    let curr_coords = 123;
-    let last_coords = 124;
+    let movement_update = &playerinfoentry.movement_update;
 
-    let diff_x = 111;
-    let diff_y = 222;
-    let diff_level = 333;
-
-    let large_change = false;
+    let large_change =
+        movement_update.x.abs() >= REBUILD_BOUNDARY || movement_update.y.abs() >= REBUILD_BOUNDARY;
     let teleport = large_change || false;
 
     bit_buf.write_bit(mask_update)?;
@@ -729,14 +734,14 @@ fn write_local_movement(
         // SKIP TELEPORT FOR NOW
         bit_buf.write(2, 3)?;
         bit_buf.write_bit(large_change)?;
-        bit_buf.write(2, diff_level & 0x3)?;
+        bit_buf.write(2, movement_update.z & 0x3)?;
 
         if large_change {
-            bit_buf.write(14, diff_x & 0x3FFF)?;
-            bit_buf.write(14, diff_y & 0x3FFF)?;
+            bit_buf.write(14, movement_update.x & 0x3FFF)?;
+            bit_buf.write(14, movement_update.y & 0x3FFF)?;
         } else {
-            bit_buf.write(5, diff_x & 0x1F)?;
-            bit_buf.write(5, diff_y & 0x1F)?;
+            bit_buf.write(5, movement_update.x & 0x1F)?;
+            bit_buf.write(5, movement_update.y & 0x1F)?;
         }
     } else {
         /*let steps = &mut world.players.get_mut(target_id)?.movement_queue.next_steps;
