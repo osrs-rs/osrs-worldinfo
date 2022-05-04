@@ -243,14 +243,15 @@ impl PlayerInfo {
             let move_update =
                 !playerinfoentryother.movement_steps.is_empty() || playerinfoentryother.displaced;
 
-            // If there is a mask update, write them out
-            if mask_update {
-                write_mask_update(mask_buf, playerinfoentryother);
-            }
-
             // If there is either a mask or movement update, write true signifying that the player needs an update
             if mask_update || move_update {
                 bit_buf.write_bit(LOCAL_PLAYER_UPDATE_REQUIRED)?;
+            }
+
+            // If there is a mask update, write them out
+            // TODO: Make this its own separate step
+            if mask_update {
+                write_mask_update(mask_buf, playerinfoentryother);
             }
 
             if move_update {
