@@ -755,7 +755,6 @@ fn write_local_movement(
         let mut direction = 0;
 
         if let Some(run_step) = movement_steps.get(1) {
-            println!("WHY ARE YOU RUNNING 2");
             let run_rotation = get_direction_rotation(&run_step)?;
 
             dx += *direction_diff_x
