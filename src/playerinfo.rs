@@ -95,20 +95,22 @@ impl PlayerInfoEntry {
 }
 
 pub struct PlayerInfo {
-    players: Slab<PlayerInfoEntry>,
+    playerinfos: Slab<PlayerInfoEntry>,
+    playermasks: Slab<Vec<PlayerMask>>,
 }
 
 impl PlayerInfo {
     pub fn new() -> PlayerInfo {
         PlayerInfo {
-            players: Slab::new(),
+            playerinfos: Slab::new(),
+            playermasks: Slab::new(),
         }
     }
 
     // TODO: Return the coordinates of all global players in this function, as to aid with the InterestInit packet
     pub fn add_player(&mut self, coordinates: i32) -> Result<()> {
         // Get the playerinfo id using a vacant key, check for exceeding limit
-        let playerinfo_id = self.players.vacant_key();
+        let playerinfo_id = self.playerinfos.vacant_key();
         if playerinfo_id > MAX_PLAYERS {
             return Err(anyhow!(
                 "Maximum amount of players processable by PlayerInfo reached"
@@ -129,21 +131,21 @@ impl PlayerInfo {
         }
 
         // Insert the PlayerInfoEntry
-        self.players.insert(playerinfoentry);
+        self.playerinfos.insert(playerinfoentry);
 
         Ok(())
     }
 
     pub fn get_player(&mut self, key: usize) -> Option<&PlayerInfoEntry> {
-        self.players.get(key)
+        self.playerinfos.get(key)
     }
 
     pub fn get_player_mut(&mut self, key: usize) -> Option<&mut PlayerInfoEntry> {
-        self.players.get_mut(key)
+        self.playerinfos.get_mut(key)
     }
 
     pub fn remove_player(&mut self, key: usize) -> Result<()> {
-        self.players.remove(key);
+        self.playerinfos.remove(key);
 
         Ok(())
     }
@@ -151,7 +153,7 @@ impl PlayerInfo {
     // Process PlayerInfo, returning a buffer containing data about all the updates
     pub fn process(&mut self, player_id: usize) -> Result<Vec<u8>> {
         // TODO: Remove this, do proper checking instead in the local_player_info and global_player_info places, simply return if the player id does not exist
-        if self.players.get(player_id).is_none() {
+        if self.playerinfos.get(player_id).is_none() {
             return Ok(Vec::new());
         }
 
@@ -210,7 +212,7 @@ impl PlayerInfo {
         for current_player_id in 0..MAX_PLAYERS {
             // Grab the playerinfo
             let playerinfoentryother = self
-                .players
+                .playerinfos
                 .get_mut(player_id)
                 .context("failed 1")?
                 .playerinfodata
@@ -289,7 +291,7 @@ impl PlayerInfo {
         for i in offset..MAX_PLAYERS {
             // Grab the playerinfo
             let playerinfoentryother = self
-                .players
+                .playerinfos
                 .get_mut(player_id)
                 .context("failed 1")?
                 .playerinfodata
@@ -325,7 +327,7 @@ impl PlayerInfo {
         for i in offset..MAX_PLAYERS {
             // Grab the playerinfo
             let playerinfoentryother = self
-                .players
+                .playerinfos
                 .get_mut(player_id)
                 .context("failed 1")?
                 .playerinfodata
@@ -350,7 +352,7 @@ impl PlayerInfo {
     fn group(&mut self, player_id: usize, index: usize) -> Result<()> {
         // Get the playerinfo
         let playerinfoentryother = self
-            .players
+            .playerinfos
             .get_mut(player_id)
             .context("failed getting playerinfoentry")?
             .playerinfodata
@@ -383,7 +385,7 @@ impl PlayerInfo {
         for other_player_id in 0..MAX_PLAYERS {
             // Grab the playerinfo
             let playerinfoentryother = self
-                .players
+                .playerinfos
                 .get_mut(player_id)
                 .context("failed 1")?
                 .playerinfodata
@@ -919,7 +921,7 @@ mod tests {
         let mut playerinfo = PlayerInfo::new();
         playerinfo.add_player(123)?;
 
-        assert_eq!(playerinfo.players.len(), 1);
+        assert_eq!(playerinfo.playerinfos.len(), 1);
 
         Ok(())
     }
@@ -930,7 +932,7 @@ mod tests {
         playerinfo.add_player(131313)?;
 
         let playerinfodata = playerinfo
-            .players
+            .playerinfos
             .get_mut(0)
             .context("yes")?
             .playerinfodata
