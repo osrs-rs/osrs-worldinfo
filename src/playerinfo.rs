@@ -972,7 +972,7 @@ mod tests {
                 weapon_stance_turn90ccw: 822,
                 weapon_stance_run: 824,
                 username: "Sage".to_string(),
-                combat_level: 125,
+                combat_level: 126,
                 skill_id_level: 0,
                 hidden: 0,
                 arms: 26,
@@ -989,7 +989,7 @@ mod tests {
 
         let mut s = DefaultHasher::new();
         vec.hash(&mut s);
-        assert_eq!(s.finish(), 9926834204379934435);
+        assert_eq!(s.finish(), 2178436520615411095);
 
         let vec = playerinfo.process(0)?;
         println!("Vec with mask: {:?}", vec);
