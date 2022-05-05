@@ -17,8 +17,6 @@ const LOCAL_MOVEMENT_WALK: i32 = 1;
 const LOCAL_MOVEMENT_RUN: i32 = 2;
 const LOCAL_MOVEMENT_TELEPORT: i32 = 3;
 
-const LOCAL_PLAYER_UPDATE_REQUIRED: bool = true;
-
 struct MovementUpdate {
     x: i32,
     y: i32,
@@ -234,39 +232,55 @@ impl PlayerInfo {
                 continue;
             }
 
+            // By default, a local player update is required (unless later discovered if the player should be skipped)
+            let mut local_player_update_required = true;
+            // A player mask update is not necessarily needed as the player can be skipped here
+            let mut local_player_mask_update_required = false;
+
             // Check whether the local player should be removed and turned into a global player
             if playerinfoentryother.remove_the_local_player {
                 playerinfoentryother.reset = true;
-                remove_local_player(bit_buf, &playerinfoentryother)?;
+                remove_local_player(
+                    bit_buf,
+                    &playerinfoentryother,
+                    local_player_update_required,
+                    local_player_mask_update_required,
+                )?;
                 continue;
             }
 
             // Determine whether there is mask and movement updates
-            let mask_update = !playerinfoentryother.masks.is_empty();
-            let move_update =
+            local_player_mask_update_required = !playerinfoentryother.masks.is_empty();
+            let local_player_move_update_required =
                 !playerinfoentryother.movement_steps.is_empty() || playerinfoentryother.displaced;
 
             // If there is either a mask or movement update, write true signifying that the player needs an update
-            if mask_update || move_update {
-                bit_buf.write_bit(LOCAL_PLAYER_UPDATE_REQUIRED)?;
+            if local_player_mask_update_required || local_player_move_update_required {
+                bit_buf.write_bit(local_player_update_required)?;
             }
 
             // If there is a mask update, write them out
             // TODO: Make this its own separate step
-            if mask_update {
+            if local_player_mask_update_required {
                 write_mask_update(mask_buf, playerinfoentryother);
             }
 
-            if move_update {
-                write_local_movement(bit_buf, playerinfoentryother, mask_update)
-                    .expect("failed writing local movement");
-            } else if mask_update {
+            if local_player_move_update_required {
+                write_local_movement(
+                    bit_buf,
+                    playerinfoentryother,
+                    local_player_mask_update_required,
+                )
+                .expect("failed writing local movement");
+            } else if local_player_mask_update_required {
                 write_mask_update_signal(bit_buf).expect("failed writing mask update signal");
             } else {
+                local_player_update_required = false;
+
                 playerinfoentryother.flags |= 0x2;
                 skip_count =
                     self.get_local_skip_count(update_group, player_id, other_player_id + 1)?;
-                write_skip_count(bit_buf, skip_count).ok();
+                write_skip_count(bit_buf, skip_count, local_player_update_required).ok();
             }
         }
 
@@ -440,7 +454,7 @@ impl PlayerInfo {
             playerinfoentryother.flags |= 0x2;
             skip_count =
                 self.get_global_skip_count(update_group, player_id, other_player_id + 1)?;
-            write_skip_count(bit_buf, skip_count).ok();
+            write_skip_count(bit_buf, skip_count, false).ok();
         }
 
         Ok(0)
@@ -450,8 +464,9 @@ impl PlayerInfo {
 fn write_skip_count(
     bit_buf: &mut BitWriter<Vec<u8>, bitstream_io::BigEndian>,
     skip_count: i32,
+    player_update: bool,
 ) -> Result<()> {
-    bit_buf.write(1, 0)?;
+    bit_buf.write_bit(player_update)?;
 
     if skip_count == 0 {
         bit_buf.write(2, skip_count as u32)?;
@@ -628,14 +643,16 @@ fn write_mask_update(mask_buf: &mut ByteBuffer, playerinfo: &mut PlayerInfoData)
 fn remove_local_player(
     bit_buf: &mut BitWriter<Vec<u8>, bitstream_io::BigEndian>,
     playerinfo: &PlayerInfoData,
+    local_player_update_required: bool,
+    local_player_mask_update_required: bool,
 ) -> Result<()> {
     let new_coordinates = 123;
     let record_coordinates = 12311;
 
     let coordinate_change = new_coordinates != record_coordinates;
 
-    bit_buf.write_bit(true)?;
-    bit_buf.write_bit(false)?;
+    bit_buf.write_bit(local_player_update_required)?;
+    bit_buf.write_bit(local_player_mask_update_required)?;
     bit_buf.write(2, 0)?;
     bit_buf.write_bit(coordinate_change)?;
 
