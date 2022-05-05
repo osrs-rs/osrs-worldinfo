@@ -231,7 +231,7 @@ impl PlayerInfo {
 
             // By default, a local player update is required (unless later discovered if the player should be skipped)
             let mut player_update = true;
-            // Set the  player mask update is not necessarily needed as the player can be skipped here
+            // Set the player mask update is not necessarily needed as the player can be skipped here
             let mut mask_update = false;
 
             // Check whether the local player should be removed and turned into a global player
