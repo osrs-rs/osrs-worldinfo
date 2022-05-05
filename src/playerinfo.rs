@@ -280,6 +280,8 @@ impl PlayerInfo {
         Ok(())
     }
 
+    fn write_local_bit_data(&mut self) {}
+
     fn get_local_skip_count(
         &mut self,
         update_group: i32,
