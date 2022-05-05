@@ -9,9 +9,6 @@ const UPDATE_GROUP_ACTIVE: i32 = 0;
 const UPDATE_GROUP_INACTIVE: i32 = 1;
 const REBUILD_BOUNDARY: i32 = 16;
 
-const REQUIRES_LOCAL_UPDATE: bool = true;
-const REQUIRES_LOCAL_MASK_UPDATE: bool = true;
-
 const LOCAL_MOVEMENT_NONE: i32 = 0;
 const LOCAL_MOVEMENT_WALK: i32 = 1;
 const LOCAL_MOVEMENT_RUN: i32 = 2;
@@ -210,14 +207,14 @@ impl PlayerInfo {
     ) -> Result<()> {
         let mut skip_count = 0;
 
-        for other_player_id in 0..MAX_PLAYERS {
+        for current_player_id in 0..MAX_PLAYERS {
             // Grab the playerinfo
             let playerinfoentryother = self
                 .players
                 .get_mut(player_id)
                 .context("failed 1")?
                 .playerinfodata
-                .get_mut(other_player_id)
+                .get_mut(current_player_id)
                 .context("failed 2")?;
 
             // Test whether the playerinfo is local, and whether it is in the correct update group (active, inactive)
@@ -233,54 +230,48 @@ impl PlayerInfo {
             }
 
             // By default, a local player update is required (unless later discovered if the player should be skipped)
-            let mut local_player_update_required = true;
-            // A player mask update is not necessarily needed as the player can be skipped here
-            let mut local_player_mask_update_required = false;
+            let mut player_update = true;
+            // Set the  player mask update is not necessarily needed as the player can be skipped here
+            let mut mask_update = false;
 
             // Check whether the local player should be removed and turned into a global player
             if playerinfoentryother.remove_the_local_player {
                 playerinfoentryother.reset = true;
-                remove_local_player(
-                    bit_buf,
-                    &playerinfoentryother,
-                    local_player_update_required,
-                    local_player_mask_update_required,
-                )?;
+                remove_local_player(bit_buf, &playerinfoentryother, player_update, mask_update)?;
                 continue;
             }
 
             // Determine whether there is mask and movement updates
-            local_player_mask_update_required = !playerinfoentryother.masks.is_empty();
-            let local_player_move_update_required =
+            mask_update = !playerinfoentryother.masks.is_empty();
+            let movement_update =
                 !playerinfoentryother.movement_steps.is_empty() || playerinfoentryother.displaced;
 
-            // If there is either a mask or movement update, write true signifying that the player needs an update
-            if local_player_mask_update_required || local_player_move_update_required {
-                bit_buf.write_bit(local_player_update_required)?;
-            }
+            // Check whether there is a mask update or movement, else skip the player
+            if mask_update || movement_update {
+                // Write the player update bool (true) that a player indeed needs to be updated
+                bit_buf.write_bit(player_update)?;
 
-            // If there is a mask update, write them out
-            // TODO: Make this its own separate step
-            if local_player_mask_update_required {
-                write_mask_update(mask_buf, playerinfoentryother);
-            }
+                // Check whether there is a movement update, else there is a mask update
+                if movement_update {
+                    write_local_movement(bit_buf, playerinfoentryother, mask_update)
+                        .expect("failed writing local movement");
+                } else {
+                    write_mask_update_signal(bit_buf).expect("failed writing mask update signal");
+                }
 
-            if local_player_move_update_required {
-                write_local_movement(
-                    bit_buf,
-                    playerinfoentryother,
-                    local_player_mask_update_required,
-                )
-                .expect("failed writing local movement");
-            } else if local_player_mask_update_required {
-                write_mask_update_signal(bit_buf).expect("failed writing mask update signal");
+                // TODO: Move this to its own step. This is only here because the borrow checker errors on "get_local_skip_count" as the PlayerInfo struct is borrowed when that function is called
+                // Ideally this step should be after this whole block, so after write_skip_count.
+                if mask_update {
+                    write_mask_update(mask_buf, playerinfoentryother);
+                }
             } else {
-                local_player_update_required = false;
+                // The player will not be updated, set the player update to false
+                player_update = false;
 
                 playerinfoentryother.flags |= 0x2;
                 skip_count =
-                    self.get_local_skip_count(update_group, player_id, other_player_id + 1)?;
-                write_skip_count(bit_buf, skip_count, local_player_update_required).ok();
+                    self.get_local_skip_count(update_group, player_id, current_player_id + 1)?;
+                write_skip_count(bit_buf, skip_count, player_update).ok();
             }
         }
 
