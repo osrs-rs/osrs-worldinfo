@@ -91,7 +91,9 @@ pub struct PlayerInfoData {
 
 /// The PlayerInfo containing information about all players and their associated masks
 pub struct PlayerInfo {
-    // TESTY
+    // A many-to-many mapping from a player to all other players.
+    // This means a player with id 0 will store data of player
+    // 0, 1, 2, 3, ... 2047
     playerinfos: Slab<Slab<PlayerInfoData>>,
     playermasks: Slab<Vec<PlayerMask>>,
 }
@@ -962,7 +964,6 @@ mod tests {
             .playerinfos
             .get_mut(0)
             .context("yes")?
-            .playerinfodata
             .get_mut(0)
             .context("yess")?;
 
