@@ -1,3 +1,4 @@
+//! PlayerInfo stuff
 use anyhow::{anyhow, Context, Result};
 use bitstream_io::{BigEndian, BitWrite, BitWriter};
 use osrs_buffer::ByteBuffer;
@@ -20,11 +21,13 @@ struct MovementUpdate {
     z: i32,
 }
 
+/// An enum containing all possible masks on a player
 pub enum PlayerMask {
     AppearanceMask(AppearanceMask),
     DirectionMask(DirectionMask),
 }
 
+/// The appearance mask of the player
 pub struct AppearanceMask {
     pub gender: i8,
     pub skull: bool,
@@ -64,11 +67,12 @@ pub struct AppearanceMask {
     pub hidden: i8,
 }
 
+/// Dat mask 2
 pub struct DirectionMask {
     pub direction: i16,
 }
 
-// An entry for a player, which contains data about all other players
+/// An entry for a player, which contains data about all other players
 pub struct PlayerInfoEntry {
     playerinfodata: Slab<PlayerInfoData>,
 }
@@ -94,6 +98,7 @@ impl PlayerInfoEntry {
     }
 }
 
+/// The PlayerInfo
 pub struct PlayerInfo {
     playerinfos: Slab<PlayerInfoEntry>,
     playermasks: Slab<Vec<PlayerMask>>,
