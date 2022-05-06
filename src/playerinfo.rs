@@ -150,7 +150,7 @@ impl PlayerInfo {
         Ok(())
     }
 
-    // Process PlayerInfo, returning a buffer containing data about all the updates
+    // Process PlayerInfo, returning a buffer containing data about all the updates for the specified player
     pub fn process(&mut self, player_id: usize) -> Result<Vec<u8>> {
         // TODO: Remove this, do proper checking instead in the local_player_info and global_player_info places, simply return if the player id does not exist
         if self.playerinfos.get(player_id).is_none() {
