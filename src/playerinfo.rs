@@ -159,6 +159,7 @@ impl PlayerInfo {
             .get_mut(key)
             .context("failed getting playermask vec")?;
 
+        // TODO: Simplify this, consider maybe passing the mask id's on creating a new PlayerInfo
         let mask_id = match mask {
             PlayerMask::AppearanceMask(_) => 3,
             PlayerMask::DirectionMask(_) => 2,
