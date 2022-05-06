@@ -67,7 +67,7 @@ pub struct AppearanceMask {
     pub hidden: i8,
 }
 
-/// Dat mask 2
+/// The direction mask of the player
 pub struct DirectionMask {
     pub direction: i16,
 }
@@ -98,13 +98,14 @@ impl PlayerInfoEntry {
     }
 }
 
-/// The PlayerInfo
+/// The PlayerInfo containing information about all players and their associated masks
 pub struct PlayerInfo {
     playerinfos: Slab<PlayerInfoEntry>,
     playermasks: Slab<Vec<PlayerMask>>,
 }
 
 impl PlayerInfo {
+    /// Create a new PlayerInfo
     pub fn new() -> PlayerInfo {
         PlayerInfo {
             playerinfos: Slab::new(),
@@ -113,6 +114,7 @@ impl PlayerInfo {
     }
 
     // TODO: Return the coordinates of all global players in this function, as to aid with the InterestInit packet
+    /// Add a new player to the PlayerInfo
     pub fn add_player(&mut self, coordinates: i32) -> Result<()> {
         // Get the playerinfo id using a vacant key, check for exceeding limit
         let playerinfo_id = self.playerinfos.vacant_key();
@@ -141,21 +143,51 @@ impl PlayerInfo {
         Ok(())
     }
 
+    /// Get a player mask to check if it exists
+    pub fn get_player_mask(&mut self, key: usize, mask_id: usize) -> Result<Option<&PlayerMask>> {
+        let player_mask_vec = self
+            .playermasks
+            .get_mut(key)
+            .context("failed getting playermask vec")?;
+
+        Ok(player_mask_vec.get(mask_id))
+    }
+
+    pub fn add_player_mask(&mut self, key: usize, mask: PlayerMask) -> Result<()> {
+        let player_mask_vec = self
+            .playermasks
+            .get_mut(key)
+            .context("failed getting playermask vec")?;
+
+        let mask_id = match mask {
+            PlayerMask::AppearanceMask(_) => 3,
+            PlayerMask::DirectionMask(_) => 2,
+        };
+
+        player_mask_vec.insert(mask_id, mask);
+
+        Ok(())
+    }
+
+    /// TODO: Consider remove
     pub fn get_player(&mut self, key: usize) -> Option<&PlayerInfoEntry> {
         self.playerinfos.get(key)
     }
 
+    /// TODO: Consider remove
     pub fn get_player_mut(&mut self, key: usize) -> Option<&mut PlayerInfoEntry> {
         self.playerinfos.get_mut(key)
     }
 
+    /// Remove a player from the PlayerInfo
     pub fn remove_player(&mut self, key: usize) -> Result<()> {
         self.playerinfos.remove(key);
 
         Ok(())
     }
 
-    // Process PlayerInfo, returning a buffer containing data about all the updates for the specified player
+    /// Process a player contained in the PlayerInfo, returning a buffer with data about all the updates for the specified player,
+    /// to be sent
     pub fn process(&mut self, player_id: usize) -> Result<Vec<u8>> {
         // TODO: Remove this, do proper checking instead in the local_player_info and global_player_info places, simply return if the player id does not exist
         if self.playerinfos.get(player_id).is_none() {
