@@ -72,17 +72,16 @@ pub struct DirectionMask {
     pub direction: i16,
 }
 
-/// An entry for a player, which contains data about all other players
-pub struct PlayerInfoEntry {
-    playerinfodata: Slab<PlayerInfoData>,
-}
-
-// TODO: Consider just making this the PlayerInfoEntry, as this is kind of wasted
-struct PlayerInfoData {
+/// Contains the data of the PlayerInfo entry
+pub struct PlayerInfoData {
+    // START RSMOD IMPL
     flags: i32,
     local: bool,
     coordinates: i32,
     reset: bool,
+    // END RSMOD IMPL
+
+    // The rest below here are custom, and might need to be revised in terms of correct structure
     remove_the_local_player: bool,
     masks: Vec<PlayerMask>,
     movement_steps: Vec<(i32, i32)>,
@@ -90,17 +89,10 @@ struct PlayerInfoData {
     movement_update: MovementUpdate,
 }
 
-impl PlayerInfoEntry {
-    pub fn new() -> PlayerInfoEntry {
-        PlayerInfoEntry {
-            playerinfodata: Slab::new(),
-        }
-    }
-}
-
 /// The PlayerInfo containing information about all players and their associated masks
 pub struct PlayerInfo {
-    playerinfos: Slab<PlayerInfoEntry>,
+    // TESTY
+    playerinfos: Slab<Slab<PlayerInfoData>>,
     playermasks: Slab<Vec<PlayerMask>>,
 }
 
@@ -125,7 +117,7 @@ impl PlayerInfo {
         }
 
         // Create a new playerinfo entry
-        let mut playerinfoentry = PlayerInfoEntry::new();
+        let mut playerinfoentry = Slab::new();
 
         // Generate the playerinfo data for the given player
         for playerinfo in 0..MAX_PLAYERS {
@@ -171,12 +163,12 @@ impl PlayerInfo {
     }
 
     /// TODO: Consider remove
-    pub fn get_player(&mut self, key: usize) -> Option<&PlayerInfoEntry> {
+    pub fn get_player(&mut self, key: usize) -> Option<&Slab<PlayerInfoData>> {
         self.playerinfos.get(key)
     }
 
     /// TODO: Consider remove
-    pub fn get_player_mut(&mut self, key: usize) -> Option<&mut PlayerInfoEntry> {
+    pub fn get_player_mut(&mut self, key: usize) -> Option<&mut Slab<PlayerInfoData>> {
         self.playerinfos.get_mut(key)
     }
 
@@ -253,7 +245,6 @@ impl PlayerInfo {
                 .playerinfos
                 .get_mut(player_id)
                 .context("failed 1")?
-                .playerinfodata
                 .get_mut(current_player_id)
                 .context("failed 2")?;
 
@@ -334,7 +325,6 @@ impl PlayerInfo {
                 .playerinfos
                 .get_mut(player_id)
                 .context("failed 1")?
-                .playerinfodata
                 .get_mut(i)
                 .context("failed 2")?;
 
@@ -370,7 +360,6 @@ impl PlayerInfo {
                 .playerinfos
                 .get_mut(player_id)
                 .context("failed 1")?
-                .playerinfodata
                 .get_mut(i)
                 .context("failed 2")?;
 
@@ -395,7 +384,6 @@ impl PlayerInfo {
             .playerinfos
             .get_mut(player_id)
             .context("failed getting playerinfoentry")?
-            .playerinfodata
             .get_mut(index)
             .context("failed playerinfoother")?;
 
@@ -428,7 +416,6 @@ impl PlayerInfo {
                 .playerinfos
                 .get_mut(player_id)
                 .context("failed 1")?
-                .playerinfodata
                 .get_mut(other_player_id)
                 .context("failed 2")?;
 
@@ -521,11 +508,11 @@ fn write_skip_count(
 }
 
 fn add_update_record(
-    playerinfo: &mut PlayerInfoEntry,
+    playerinfo: &mut Slab<PlayerInfoData>,
     local: bool,
     coordinates: i32,
 ) -> Result<()> {
-    playerinfo.playerinfodata.insert(PlayerInfoData {
+    playerinfo.insert(PlayerInfoData {
         flags: 0,
         local,
         coordinates,
