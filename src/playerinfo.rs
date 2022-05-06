@@ -250,7 +250,7 @@ impl PlayerInfo {
 
             // Check whether there is a mask update or movement, else skip the player
             if mask_update || movement_update {
-                // Write the player update bool (true) that a player indeed needs to be updated
+                // Write the player update bool (true) that a player needs to be updated
                 bit_buf.write_bit(player_update)?;
 
                 // Check whether there is a movement update, else there is a mask update
