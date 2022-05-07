@@ -72,6 +72,13 @@ pub struct DirectionMask {
     pub direction: i16,
 }
 
+pub struct PlayerUpdate {
+    masks: Vec<PlayerMask>,
+    movement_steps: Vec<(i32, i32)>,
+    displaced: bool,
+    movement_update: MovementUpdate,
+}
+
 /// Contains the data of the PlayerInfo entry
 pub struct PlayerInfoData {
     // START RSMOD IMPL
@@ -97,7 +104,7 @@ pub struct PlayerInfo {
     // 0, 1, 2, 3, ... 2047
     playerinfos: Slab<Slab<PlayerInfoData>>,
     // TODO: Use this field here for playermasks (or potentially just PlayerUpdates) as it will not have issues with the borrow checker
-    playermasks: Slab<Vec<PlayerMask>>,
+    playerupdates: Slab<PlayerUpdate>,
 }
 
 impl PlayerInfo {
@@ -105,7 +112,7 @@ impl PlayerInfo {
     pub fn new() -> PlayerInfo {
         PlayerInfo {
             playerinfos: Slab::new(),
-            playermasks: Slab::new(),
+            playerupdates: Slab::new(),
         }
     }
 
@@ -141,17 +148,17 @@ impl PlayerInfo {
 
     /// Get a player mask to check if it exists
     pub fn get_player_mask(&mut self, key: usize, mask_id: usize) -> Result<Option<&PlayerMask>> {
-        let player_mask_vec = self
-            .playermasks
+        let player_update = self
+            .playerupdates
             .get_mut(key)
             .context("failed getting playermask vec")?;
 
-        Ok(player_mask_vec.get(mask_id))
+        Ok(player_update.masks.get(mask_id))
     }
 
     pub fn add_player_mask(&mut self, key: usize, mask: PlayerMask) -> Result<()> {
-        let player_mask_vec = self
-            .playermasks
+        let player_update = self
+            .playerupdates
             .get_mut(key)
             .context("failed getting playermask vec")?;
 
@@ -161,7 +168,7 @@ impl PlayerInfo {
             PlayerMask::DirectionMask(_) => 2,
         };
 
-        player_mask_vec.insert(mask_id, mask);
+        player_update.masks.insert(mask_id, mask);
 
         Ok(())
     }
