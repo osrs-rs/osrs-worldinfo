@@ -95,7 +95,7 @@ pub struct PlayerInfo {
     // This means a player with id 0 will store data of player
     // 0, 1, 2, 3, ... 2047
     playerinfos: Slab<Slab<PlayerInfoData>>,
-    // TODO: Use this field here for playermasks as it will not have issues with the borrow checker
+    // TODO: Use this field here for playermasks (or potentially just PlayerUpdates) as it will not have issues with the borrow checker
     playermasks: Slab<Vec<PlayerMask>>,
 }
 
