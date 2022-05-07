@@ -76,6 +76,7 @@ pub struct DirectionMask {
 }
 
 pub struct PlayerUpdate {
+    has_mask_update: bool,
     masks: Vec<PlayerMask>,
     movement_steps: Vec<(i32, i32)>,
     displaced: bool,
@@ -146,6 +147,7 @@ impl PlayerInfo {
             movement_steps: Vec::with_capacity(MAX_MOVEMENT_STEPS),
             displaced: false,
             movement_update: MovementUpdate { x: 0, y: 0, z: 0 },
+            has_mask_update: false,
         });
 
         Ok(())
@@ -193,6 +195,7 @@ impl PlayerInfo {
         }
 
         player_update.masks.insert(mask_id, mask);
+        player_update.has_mask_update = true;
 
         Ok(())
     }
@@ -314,7 +317,7 @@ impl PlayerInfo {
                 .context("testy boi")?;
 
             // Determine whether there is mask and movement updates
-            mask_update = !player_updates.masks.is_empty();
+            mask_update = !player_updates.has_mask_update;
             let movement_update =
                 !player_updates.movement_steps.is_empty() || player_updates.displaced;
 
