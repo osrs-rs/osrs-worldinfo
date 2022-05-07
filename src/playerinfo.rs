@@ -82,7 +82,8 @@ pub struct PlayerInfoData {
     // END RSMOD IMPL
 
     // The rest below here are custom, and might need to be revised in terms of correct structure
-    remove_the_local_player: bool,
+    local_to_global: bool,
+    global_to_local: bool,
     masks: Vec<PlayerMask>,
     movement_steps: Vec<(i32, i32)>,
     displaced: bool,
@@ -269,7 +270,7 @@ impl PlayerInfo {
             let mut mask_update = false;
 
             // Check whether the local player should be removed and turned into a global player
-            if playerinfoentryother.remove_the_local_player {
+            if playerinfoentryother.local_to_global {
                 playerinfoentryother.reset = true;
                 remove_local_player(bit_buf, &playerinfoentryother, player_update, mask_update)?;
                 continue;
@@ -399,6 +400,8 @@ impl PlayerInfo {
             playerinfoentryother.coordinates = 0;
             playerinfoentryother.local = false;
             playerinfoentryother.reset = false;
+            playerinfoentryother.local_to_global = false;
+            playerinfoentryother.global_to_local = false;
         }
 
         Ok(())
@@ -434,6 +437,9 @@ impl PlayerInfo {
                 playerinfoentryother.flags |= 0x2;
                 continue;
             }
+
+            // Check whether a global player should be made local
+            if playerinfoentryother.global_to_local {}
 
             // TODO: Make some Option type here for that a player should be added
             /*if world.players.get(i).is_some() {
@@ -520,11 +526,12 @@ fn add_update_record(
         local,
         coordinates,
         reset: false,
-        remove_the_local_player: false,
+        local_to_global: false,
         masks: Vec::new(),
         movement_steps: Vec::new(),
         displaced: false,
         movement_update: MovementUpdate { x: 0, y: 0, z: 0 },
+        global_to_local: false,
     });
 
     Ok(())
