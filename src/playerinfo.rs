@@ -91,10 +91,6 @@ pub struct PlayerInfoData {
     // The rest below here are custom, and might need to be revised in terms of correct structure
     local_to_global: bool,
     global_to_local: bool,
-    masks: Vec<PlayerMask>,
-    movement_steps: Vec<(i32, i32)>,
-    displaced: bool,
-    movement_update: MovementUpdate,
 }
 
 /// The PlayerInfo containing information about all players and their associated masks
@@ -283,10 +279,15 @@ impl PlayerInfo {
                 continue;
             }
 
+            let player_updates = self
+                .playerupdates
+                .get_mut(current_player_id)
+                .context("testy boi")?;
+
             // Determine whether there is mask and movement updates
-            mask_update = !playerinfoentryother.masks.is_empty();
+            mask_update = !player_updates.masks.is_empty();
             let movement_update =
-                !playerinfoentryother.movement_steps.is_empty() || playerinfoentryother.displaced;
+                !player_updates.movement_steps.is_empty() || player_updates.displaced;
 
             // Check whether there is a mask update or movement, else skip the player
             if mask_update || movement_update {
@@ -295,7 +296,7 @@ impl PlayerInfo {
 
                 // Check whether there is a movement update, else there is a mask update
                 if movement_update {
-                    write_local_movement(bit_buf, playerinfoentryother, mask_update)
+                    write_local_movement(bit_buf, player_updates, mask_update)
                         .expect("failed writing local movement");
                 } else {
                     write_mask_update_signal(bit_buf).expect("failed writing mask update signal");
@@ -304,7 +305,7 @@ impl PlayerInfo {
                 // TODO: Move this to its own step. This is only here because the borrow checker errors on "get_local_skip_count" as the PlayerInfo struct is borrowed when that function is called
                 // Ideally this step should be after this whole block, so after write_skip_count.
                 if mask_update {
-                    write_mask_update(mask_buf, playerinfoentryother);
+                    write_mask_update(mask_buf, player_updates);
                 }
             } else {
                 // The player will not be updated, set the player update to false
@@ -534,17 +535,13 @@ fn add_update_record(
         coordinates,
         reset: false,
         local_to_global: false,
-        masks: Vec::new(),
-        movement_steps: Vec::new(),
-        displaced: false,
-        movement_update: MovementUpdate { x: 0, y: 0, z: 0 },
         global_to_local: false,
     });
 
     Ok(())
 }
 
-fn write_mask_update(mask_buf: &mut ByteBuffer, playerinfo: &mut PlayerInfoData) {
+fn write_mask_update(mask_buf: &mut ByteBuffer, playerinfo: &mut PlayerUpdate) {
     let mut mask: i32 = 0;
 
     // TODO: When assigning masks to players, OR the value of the mask on them instead of this double loop
@@ -759,7 +756,7 @@ fn write_coordinate_multiplier(
 
 fn write_local_movement(
     bit_buf: &mut BitWriter<Vec<u8>, bitstream_io::BigEndian>,
-    playerinfoentry: &mut PlayerInfoData,
+    playerinfoentry: &mut PlayerUpdate,
     mask_update: bool,
 ) -> Result<()> {
     let direction_diff_x = [-1, 0, 1, -1, 1, -1, 0, 1];
@@ -975,12 +972,7 @@ mod tests {
         let mut playerinfo = PlayerInfo::new();
         playerinfo.add_player(131313)?;
 
-        let playerinfodata = playerinfo
-            .playerinfos
-            .get_mut(0)
-            .context("yes")?
-            .get_mut(0)
-            .context("yess")?;
+        let playerinfodata = playerinfo.playerupdates.get_mut(0).context("yes")?;
 
         playerinfodata
             .masks
