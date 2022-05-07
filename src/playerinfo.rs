@@ -6,6 +6,9 @@ use slab::Slab;
 use std::{cmp, io::Write};
 
 const MAX_PLAYERS: usize = 2047;
+const MAX_PLAYER_MASKS: usize = 15;
+const MAX_MOVEMENT_STEPS: usize = 2;
+
 const UPDATE_GROUP_ACTIVE: i32 = 0;
 const UPDATE_GROUP_INACTIVE: i32 = 1;
 const REBUILD_BOUNDARY: i32 = 16;
@@ -139,8 +142,8 @@ impl PlayerInfo {
         // Insert the PlayerInfoEntry
         self.playerinfos.insert(playerinfoentry);
         self.playerupdates.insert(PlayerUpdate {
-            masks: Vec::new(),
-            movement_steps: Vec::new(),
+            masks: Vec::with_capacity(MAX_PLAYER_MASKS),
+            movement_steps: Vec::with_capacity(MAX_MOVEMENT_STEPS),
             displaced: false,
             movement_update: MovementUpdate { x: 0, y: 0, z: 0 },
         });
