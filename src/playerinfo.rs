@@ -161,17 +161,36 @@ impl PlayerInfo {
         Ok(player_update.masks.get(mask_id))
     }
 
-    pub fn add_player_mask(&mut self, key: usize, mask: PlayerMask) -> Result<()> {
-        let player_update = self
-            .playerupdates
-            .get_mut(key)
-            .context("failed getting playermask vec")?;
-
-        // TODO: Simplify this, consider maybe passing the mask id's on creating a new PlayerInfo
+    // Add a player mask utilizing the current id's of the playermasks
+    pub fn add_player_mask(&mut self, player_id: usize, mask: PlayerMask) -> Result<()> {
+        // TODO: Move this to a separate function
         let mask_id = match mask {
             PlayerMask::AppearanceMask(_) => 3,
             PlayerMask::DirectionMask(_) => 2,
         };
+
+        self.add_player_mask_with_id(player_id, mask_id, mask)?;
+
+        Ok(())
+    }
+
+    pub fn add_player_mask_with_id(
+        &mut self,
+        player_id: usize,
+        mask_id: usize,
+        mask: PlayerMask,
+    ) -> Result<()> {
+        let player_update = self
+            .playerupdates
+            .get_mut(player_id)
+            .context("failed getting playermask vec")?;
+
+        if mask_id > MAX_PLAYER_MASKS {
+            return Err(anyhow!(
+                "Mask id out of range, the maximum amount of player masks is {}",
+                MAX_PLAYER_MASKS
+            ));
+        }
 
         player_update.masks.insert(mask_id, mask);
 
