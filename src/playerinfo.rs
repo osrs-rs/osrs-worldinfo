@@ -129,10 +129,10 @@ impl PlayerInfo {
         // Generate the playerinfo data for the given player
         for playerinfo in 0..MAX_PLAYERS {
             if playerinfo_id == playerinfo {
-                add_update_record(&mut playerinfoentry, true, coordinates)
+                add_playerinfodata(&mut playerinfoentry, true, coordinates)
                     .expect("failed adding update record for local player");
             }
-            add_update_record(&mut playerinfoentry, false, 0)
+            add_playerinfodata(&mut playerinfoentry, false, 0)
                 .expect("failed adding update record for external player");
         }
 
@@ -531,7 +531,7 @@ fn write_skip_count(
     Ok(())
 }
 
-fn add_update_record(
+fn add_playerinfodata(
     playerinfo: &mut Slab<PlayerInfoData>,
     local: bool,
     coordinates: i32,
