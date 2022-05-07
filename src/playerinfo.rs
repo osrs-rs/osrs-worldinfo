@@ -138,6 +138,12 @@ impl PlayerInfo {
 
         // Insert the PlayerInfoEntry
         self.playerinfos.insert(playerinfoentry);
+        self.playerupdates.insert(PlayerUpdate {
+            masks: Vec::new(),
+            movement_steps: Vec::new(),
+            displaced: false,
+            movement_update: MovementUpdate { x: 0, y: 0, z: 0 },
+        });
 
         Ok(())
     }
@@ -182,6 +188,7 @@ impl PlayerInfo {
     /// Remove a player from the PlayerInfo
     pub fn remove_player(&mut self, key: usize) -> Result<()> {
         self.playerinfos.remove(key);
+        self.playerupdates.remove(key);
 
         Ok(())
     }
