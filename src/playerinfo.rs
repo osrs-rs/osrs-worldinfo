@@ -76,8 +76,8 @@ pub struct DirectionMask {
 }
 
 pub struct PlayerUpdate {
-    has_mask_update: bool,
     masks: Vec<PlayerMask>,
+    mask_flags: i32,
     movement_steps: Vec<(i32, i32)>,
     displaced: bool,
     movement_update: MovementUpdate,
@@ -105,6 +105,40 @@ pub struct PlayerInfo {
     playerinfos: Slab<Slab<PlayerInfoData>>,
     // TODO: Use this field here for playermasks (or potentially just PlayerUpdates) as it will not have issues with the borrow checker
     playerupdates: Slab<PlayerUpdate>,
+}
+
+fn get_local_skip_count(
+    playerinfos: &Slab<Slab<PlayerInfoData>>,
+    update_group: i32,
+    player_id: usize,
+    offset: usize,
+) -> Result<i32> {
+    let mut count = 0;
+
+    for i in offset..MAX_PLAYERS {
+        // Grab the playerinfo
+        let playerinfoentryother = playerinfos
+            .get(player_id)
+            .context("failed 1")?
+            .get(i)
+            .context("failed 2")?;
+
+        // Return if the playerinfo is not in this group
+        if !(playerinfoentryother.local && (update_group & 0x1) == playerinfoentryother.flags) {
+            continue;
+        }
+
+        // Break if a player needs to be updated
+        let is_update_required = true;
+        if is_update_required {
+            break;
+        }
+
+        // Increment the skip count by 1
+        count += 1;
+    }
+
+    Ok(count)
 }
 
 impl PlayerInfo {
@@ -147,7 +181,7 @@ impl PlayerInfo {
             movement_steps: Vec::with_capacity(MAX_MOVEMENT_STEPS),
             displaced: false,
             movement_update: MovementUpdate { x: 0, y: 0, z: 0 },
-            has_mask_update: false,
+            mask_flags: 0,
         });
 
         Ok(())
@@ -182,11 +216,13 @@ impl PlayerInfo {
         mask_id: usize,
         mask: PlayerMask,
     ) -> Result<()> {
+        // Get the player update
         let player_update = self
             .playerupdates
             .get_mut(player_id)
             .context("failed getting playermask vec")?;
 
+        // Validate whether the player mask's id is within the correct index
         if mask_id > MAX_PLAYER_MASKS {
             return Err(anyhow!(
                 "Mask id out of range, the maximum amount of player masks is {}",
@@ -194,8 +230,9 @@ impl PlayerInfo {
             ));
         }
 
-        player_update.masks.insert(mask_id, mask);
-        player_update.has_mask_update = true;
+        // Insert the player mask on the specified index, and bitwise OR the mask flags given the mask's id
+        player_update.masks.push(mask);
+        player_update.mask_flags |= 2_i32.pow(mask_id as u32);
 
         Ok(())
     }
@@ -299,54 +336,56 @@ impl PlayerInfo {
                 continue;
             }
 
-            // By default, a local player update is required (unless later discovered if the player should be skipped)
-            let mut player_update = true;
-            // Default the mask update to false as it is possible for a player to be removed, meaning no mask updates
-            let mut mask_update = false;
-
-            // Check whether the local player should be removed and turned into a global player
-            if playerinfoentryother.local_to_global {
-                playerinfoentryother.reset = true;
-                remove_local_player(bit_buf, &playerinfoentryother, player_update, mask_update)?;
-                continue;
-            }
-
+            // Get the player updates
             let player_updates = self
                 .playerupdates
                 .get_mut(current_player_id)
                 .context("testy boi")?;
 
-            // Determine whether there is mask and movement updates
-            mask_update = !player_updates.has_mask_update;
+            // Get whether there is mask or movement updates
+            let mask_update = player_updates.mask_flags > 0;
             let movement_update =
                 !player_updates.movement_steps.is_empty() || player_updates.displaced;
 
-            // Check whether there is a mask update or movement, else skip the player
-            if mask_update || movement_update {
-                // Write the player update bool (true) that a player needs to be updated
-                bit_buf.write_bit(player_update)?;
+            // Check whether a player update is needed
+            // If the player is to be removed, or it has a mask update, or it has a movement update, the first bit is set to true
+            // (player update in this context)
+            let player_update =
+                playerinfoentryother.local_to_global || mask_update || movement_update;
 
-                // Check whether there is a movement update, else there is a mask update
-                if movement_update {
+            // Write the player update bool to signify whether a player needs to be updated or not
+            bit_buf.write_bit(player_update)?;
+
+            // Check if a player update is needed, else write the skip count
+            if player_update {
+                // Check whether the local player should be removed and turned into a global player
+                if playerinfoentryother.local_to_global {
+                    playerinfoentryother.reset = true;
+                    remove_local_player(bit_buf, playerinfoentryother, mask_update)?;
+                // Else write a movement update
+                } else if movement_update {
                     write_local_movement(bit_buf, player_updates, mask_update)
                         .expect("failed writing local movement");
+                // Else write to the bitbuffer that it should read masks
                 } else {
                     write_mask_update_signal(bit_buf).expect("failed writing mask update signal");
                 }
-
-                // TODO: Move this to its own step. This is only here because the borrow checker errors on "get_local_skip_count" as the PlayerInfo struct is borrowed when that function is called
-                // Ideally this step should be after this whole block, so after write_skip_count.
-                if mask_update {
-                    write_mask_update(mask_buf, player_updates);
-                }
             } else {
-                // The player will not be updated, set the player update to false
-                player_update = false;
-
                 playerinfoentryother.flags |= 0x2;
-                skip_count =
-                    self.get_local_skip_count(update_group, player_id, current_player_id + 1)?;
+                skip_count = get_local_skip_count(
+                    &self.playerinfos,
+                    update_group,
+                    player_id,
+                    current_player_id + 1,
+                )?;
                 write_skip_count(bit_buf, skip_count, player_update).ok();
+            }
+
+            // TODO: Move writing of masks to its own step.
+            // This is only here because the borrow checker errors on "get_local_skip_count" as the PlayerInfo struct is borrowed when that function is called
+            // Ideally this step should be after this whole block, so after write_skip_count.
+            if mask_update {
+                write_mask_update(mask_buf, player_updates);
             }
         }
 
@@ -354,41 +393,6 @@ impl PlayerInfo {
     }
 
     fn write_local_bit_data(&mut self) {}
-
-    fn get_local_skip_count(
-        &mut self,
-        update_group: i32,
-        player_id: usize,
-        offset: usize,
-    ) -> Result<i32> {
-        let mut count = 0;
-
-        for i in offset..MAX_PLAYERS {
-            // Grab the playerinfo
-            let playerinfoentryother = self
-                .playerinfos
-                .get_mut(player_id)
-                .context("failed 1")?
-                .get_mut(i)
-                .context("failed 2")?;
-
-            // Return if the playerinfo is not in this group
-            if !(playerinfoentryother.local && (update_group & 0x1) == playerinfoentryother.flags) {
-                continue;
-            }
-
-            // Break if a player needs to be updated
-            let is_update_required = true;
-            if is_update_required {
-                break;
-            }
-
-            // Increment the skip count by 1
-            count += 1;
-        }
-
-        Ok(count)
-    }
 
     fn get_global_skip_count(
         &mut self,
@@ -523,6 +527,10 @@ impl PlayerInfo {
             playerinfoentryother.flags |= 0x2;
             skip_count =
                 self.get_global_skip_count(update_group, player_id, other_player_id + 1)?;
+
+            // TODO: Mark this as "player_update" properly once global player is added
+            bit_buf.write_bit(false)?;
+
             write_skip_count(bit_buf, skip_count, false).ok();
         }
 
@@ -535,8 +543,6 @@ fn write_skip_count(
     skip_count: i32,
     player_update: bool,
 ) -> Result<()> {
-    bit_buf.write_bit(player_update)?;
-
     if skip_count == 0 {
         bit_buf.write(2, skip_count as u32)?;
     } else if skip_count < 32 {
@@ -709,7 +715,6 @@ fn write_mask_update(mask_buf: &mut ByteBuffer, playerinfo: &mut PlayerUpdate) {
 fn remove_local_player(
     bit_buf: &mut BitWriter<Vec<u8>, bitstream_io::BigEndian>,
     playerinfo: &PlayerInfoData,
-    local_player_update_required: bool,
     local_player_mask_update_required: bool,
 ) -> Result<()> {
     let new_coordinates = 123;
@@ -717,7 +722,6 @@ fn remove_local_player(
 
     let coordinate_change = new_coordinates != record_coordinates;
 
-    bit_buf.write_bit(local_player_update_required)?;
     bit_buf.write_bit(local_player_mask_update_required)?;
     bit_buf.write(2, 0)?;
     bit_buf.write_bit(coordinate_change)?;
@@ -864,7 +868,7 @@ fn write_local_movement(
 fn write_mask_update_signal(
     bit_buf: &mut BitWriter<Vec<u8>, bitstream_io::BigEndian>,
 ) -> Result<()> {
-    bit_buf.write(1, 1)?;
+    bit_buf.write_bit(true)?;
     bit_buf.write(2, LOCAL_MOVEMENT_NONE)?;
 
     Ok(())
@@ -1006,9 +1010,9 @@ mod tests {
 
         let playerinfodata = playerinfo.playerupdates.get_mut(0).context("yes")?;
 
-        playerinfodata
-            .masks
-            .push(PlayerMask::AppearanceMask(AppearanceMask {
+        playerinfo.add_player_mask(
+            0,
+            PlayerMask::AppearanceMask(AppearanceMask {
                 gender: 0,
                 skull: false,
                 overhead_prayer: -1,
@@ -1043,21 +1047,27 @@ mod tests {
                 arms: 26,
                 hair: 0,
                 beard: 10,
-            }));
+            }),
+        )?;
 
-        playerinfodata
-            .masks
-            .push(PlayerMask::DirectionMask(DirectionMask { direction: 1536 }));
-
-        let vec = playerinfo.process(0)?;
-        println!("Vec with mask: {:?}", vec);
-
-        let mut s = DefaultHasher::new();
-        vec.hash(&mut s);
-        assert_eq!(s.finish(), 2178436520615411095);
+        playerinfo.add_player_mask(
+            0,
+            PlayerMask::DirectionMask(DirectionMask { direction: 1536 }),
+        )?;
 
         let vec = playerinfo.process(0)?;
-        println!("Vec with mask: {:?}", vec);
+
+        assert_eq!(
+            vec,
+            vec![
+                192, 127, 244, 10, 50, 128, 128, 128, 254, 128, 229, 231, 225, 211, 184, 131, 182,
+                131, 181, 131, 180, 131, 179, 131, 183, 131, 168, 131, 128, 128, 128, 128, 128,
+                138, 129, 170, 129, 161, 129, 128, 129, 164, 129, 154, 129, 128, 146, 129, 128,
+                128, 128, 128, 127, 127, 128, 6, 128
+            ]
+        );
+
+        let vec = playerinfo.process(0)?;
 
         Ok(())
     }
