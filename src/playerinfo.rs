@@ -24,10 +24,9 @@ struct MovementUpdate {
     z: i32,
 }
 
-/// An enum containing all possible masks on a player
-pub enum PlayerMask {
-    AppearanceMask(AppearanceMask),
-    DirectionMask(DirectionMask),
+pub struct PlayerMasks {
+    appearance_mask: Option<AppearanceMask>,
+    direction_mask: Option<DirectionMask>,
 }
 
 /// The appearance mask of the player
@@ -76,8 +75,8 @@ pub struct DirectionMask {
 }
 
 pub struct PlayerUpdate {
-    masks: Vec<PlayerMask>,
-    mask_flags: i32,
+    masks: PlayerMasks,
+    mask_flags: u32,
     movement_steps: Vec<(i32, i32)>,
     displaced: bool,
     movement_update: MovementUpdate,
@@ -177,62 +176,57 @@ impl PlayerInfo {
         // Insert the PlayerInfoEntry
         self.playerinfos.insert(playerinfoentry);
         self.playerupdates.insert(PlayerUpdate {
-            masks: Vec::with_capacity(MAX_PLAYER_MASKS),
             movement_steps: Vec::with_capacity(MAX_MOVEMENT_STEPS),
             displaced: false,
             movement_update: MovementUpdate { x: 0, y: 0, z: 0 },
             mask_flags: 0,
+            masks: PlayerMasks {
+                appearance_mask: None,
+                direction_mask: None,
+            },
         });
 
         Ok(())
     }
 
-    /// Get a player mask to check if it exists
-    pub fn get_player_mask(&mut self, key: usize, mask_id: usize) -> Result<Option<&PlayerMask>> {
+    /// Get the masks on the player. Useful for checking if a mask is already set
+    pub fn get_player_masks(&mut self, key: usize) -> Result<&PlayerMasks> {
         let player_update = self
             .playerupdates
             .get_mut(key)
             .context("failed getting playermask vec")?;
 
-        Ok(player_update.masks.get(mask_id))
+        Ok(&player_update.masks)
     }
 
-    // Add a player mask utilizing the current id's of the playermasks
-    pub fn add_player_mask(&mut self, player_id: usize, mask: PlayerMask) -> Result<()> {
-        // TODO: Move this to a separate function
-        let mask_id = match mask {
-            PlayerMask::AppearanceMask(_) => 3,
-            PlayerMask::DirectionMask(_) => 2,
-        };
+    pub fn add_player_appearance_mask(
+        &mut self,
+        player_id: usize,
+        appearance_mask: AppearanceMask,
+    ) -> Result<()> {
+        let player_update = self
+            .playerupdates
+            .get_mut(player_id)
+            .context("failed getting player")?;
 
-        self.add_player_mask_with_id(player_id, mask_id, mask)?;
+        player_update.masks.appearance_mask = Some(appearance_mask);
+        player_update.mask_flags |= APPEARANCE_MASK;
 
         Ok(())
     }
 
-    pub fn add_player_mask_with_id(
+    pub fn add_player_direction_mask(
         &mut self,
         player_id: usize,
-        mask_id: usize,
-        mask: PlayerMask,
+        direction_mask: DirectionMask,
     ) -> Result<()> {
-        // Get the player update
         let player_update = self
             .playerupdates
             .get_mut(player_id)
-            .context("failed getting playermask vec")?;
+            .context("failed getting player")?;
 
-        // Validate whether the player mask's id is within the correct index
-        if mask_id > MAX_PLAYER_MASKS {
-            return Err(anyhow!(
-                "Mask id out of range, the maximum amount of player masks is {}",
-                MAX_PLAYER_MASKS
-            ));
-        }
-
-        // Insert the player mask on the specified index, and bitwise OR the mask flags given the mask's id
-        player_update.masks.push(mask);
-        player_update.mask_flags |= 2_i32.pow(mask_id as u32);
+        player_update.masks.direction_mask = Some(direction_mask);
+        player_update.mask_flags |= DIRECTION_MASK;
 
         Ok(())
     }
@@ -482,6 +476,9 @@ impl PlayerInfo {
                 continue;
             }
 
+            let player_update = false;
+            bit_buf.write_bit(player_update)?;
+
             // Check whether a global player should be made local
             if playerinfoentryother.global_to_local {}
 
@@ -527,9 +524,6 @@ impl PlayerInfo {
             playerinfoentryother.flags |= 0x2;
             skip_count =
                 self.get_global_skip_count(update_group, player_id, other_player_id + 1)?;
-
-            // TODO: Mark this as "player_update" properly once global player is added
-            bit_buf.write_bit(false)?;
 
             write_skip_count(bit_buf, skip_count, false).ok();
         }
@@ -579,137 +573,69 @@ fn add_playerinfodata(
     Ok(())
 }
 
+// The masks and their associated bit values
+const MOVEMENT_FORCED_MASK: u32 = 0x200;
+const SPOT_ANIMATION_MASK: u32 = 0x800;
+const SEQUENCE_MASK: u32 = 0x80;
+const APPEARANCE_MASK: u32 = 0x2;
+const SHOUT_MASK: u32 = 0x20;
+const LOCK_TURNTO_MASK: u32 = 0x4;
+const MOVEMENT_CACHED_MASK: u32 = 0x1000;
+const CHAT_MASK: u32 = 0x1;
+const NAME_MODIFIERS_MASK: u32 = 0x100;
+const HIT_MASK: u32 = 0x10;
+const MOVEMENT_TEMPORARY_MASK: u32 = 0x400;
+const DIRECTION_MASK: u32 = 0x8;
+
+// The masks in which order they should be written out
+const MASKS: [u32; 12] = [
+    MOVEMENT_FORCED_MASK,
+    SPOT_ANIMATION_MASK,
+    SEQUENCE_MASK,
+    APPEARANCE_MASK,
+    SHOUT_MASK,
+    LOCK_TURNTO_MASK,
+    MOVEMENT_CACHED_MASK,
+    CHAT_MASK,
+    NAME_MODIFIERS_MASK,
+    HIT_MASK,
+    MOVEMENT_TEMPORARY_MASK,
+    DIRECTION_MASK,
+];
+
 fn write_mask_update(mask_buf: &mut ByteBuffer, playerinfo: &mut PlayerUpdate) {
-    let mut mask: i32 = 0;
-
-    // TODO: When assigning masks to players, OR the value of the mask on them instead of this double loop
-    for mask_order in 0..=11 {
-        for record in playerinfo.masks.iter() {
-            match mask_order {
-                0 => match record {
-                    // Movement forced
-                    _ => (),
-                },
-                1 => match record {
-                    // Spot animation
-                    _ => (),
-                },
-                2 => match record {
-                    // Sequence
-                    _ => (),
-                },
-                3 => match record {
-                    PlayerMask::AppearanceMask(_p) => {
-                        mask |= 0x2;
-                    }
-                    _ => (),
-                },
-                4 => match record {
-                    // Shout
-                    _ => (),
-                },
-                5 => match record {
-                    // Lock turn to
-                    _ => (),
-                },
-                6 => match record {
-                    // Movement cached
-                    _ => (),
-                },
-                7 => match record {
-                    // Chat
-                    _ => (),
-                },
-                8 => match record {
-                    // Name modifiers
-                    _ => (),
-                },
-                9 => match record {
-                    // Hit
-                    _ => (),
-                },
-                10 => match record {
-                    // Movement temporary
-                    _ => (),
-                },
-                11 => match record {
-                    PlayerMask::DirectionMask(_p) => {
-                        mask |= 0x8;
-                    }
-                    _ => (),
-                },
-                _ => (),
-            }
-        }
-    }
-
-    // TODO: Calculate mask as playermasks are set instead of doing this double iteration
-    if mask >= 0xFF {
-        mask_buf.write_i8((mask | 0x40) as i8);
-        mask_buf.write_i8((mask >> 8) as i8);
+    if playerinfo.mask_flags >= 0xFF {
+        mask_buf.write_i8((playerinfo.mask_flags | 0x40) as i8);
+        mask_buf.write_i8((playerinfo.mask_flags >> 8) as i8);
     } else {
-        mask_buf.write_i8(mask as i8);
+        mask_buf.write_i8(playerinfo.mask_flags as i8);
     }
 
-    // Now write masks
-    for mask_order in 0..=11 {
-        // TODO: Consider if this should be mutable. Very likely it won't need to be
-        for record in playerinfo.masks.iter() {
-            match mask_order {
-                0 => match record {
-                    // Movement forced
-                    _ => (),
-                },
-                1 => match record {
-                    // Spot animation
-                    _ => (),
-                },
-                2 => match record {
-                    // Sequence
-                    _ => (),
-                },
-                3 => match record {
-                    PlayerMask::AppearanceMask(p) => write_appearance_mask(&p, mask_buf),
-                    _ => (),
-                },
-                4 => match record {
-                    // Shout
-                    _ => (),
-                },
-                5 => match record {
-                    // Lock turn to
-                    _ => (),
-                },
-                6 => match record {
-                    // Movement cached
-                    _ => (),
-                },
-                7 => match record {
-                    // Chat
-                    _ => (),
-                },
-                8 => match record {
-                    // Name modifiers
-                    _ => (),
-                },
-                9 => match record {
-                    // Hit
-                    _ => (),
-                },
-                10 => match record {
-                    // Movement temporary
-                    _ => (),
-                },
-                11 => match record {
-                    PlayerMask::DirectionMask(p) => write_direction_mask(&p, mask_buf),
-                    _ => (),
-                },
-                _ => (),
-            }
+    for mask in MASKS {
+        let mask_id = playerinfo.mask_flags & mask;
+
+        match mask_id {
+            APPEARANCE_MASK => write_appearance_mask(
+                &playerinfo
+                    .masks
+                    .appearance_mask
+                    .take()
+                    .expect("missing appearance mask"),
+                mask_buf,
+            ),
+            DIRECTION_MASK => write_direction_mask(
+                &playerinfo
+                    .masks
+                    .direction_mask
+                    .take()
+                    .expect("missing direction mask"),
+                mask_buf,
+            ),
+            _ => (),
         }
     }
 
-    playerinfo.masks.clear();
+    playerinfo.mask_flags = 0;
 }
 
 fn remove_local_player(
@@ -1010,9 +936,9 @@ mod tests {
 
         let playerinfodata = playerinfo.playerupdates.get_mut(0).context("yes")?;
 
-        playerinfo.add_player_mask(
+        playerinfo.add_player_appearance_mask(
             0,
-            PlayerMask::AppearanceMask(AppearanceMask {
+            AppearanceMask {
                 gender: 0,
                 skull: false,
                 overhead_prayer: -1,
@@ -1047,13 +973,10 @@ mod tests {
                 arms: 26,
                 hair: 0,
                 beard: 10,
-            }),
+            },
         )?;
 
-        playerinfo.add_player_mask(
-            0,
-            PlayerMask::DirectionMask(DirectionMask { direction: 1536 }),
-        )?;
+        playerinfo.add_player_direction_mask(0, DirectionMask { direction: 1536 })?;
 
         let vec = playerinfo.process(0)?;
 
