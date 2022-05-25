@@ -931,11 +931,6 @@ fn walk_dir(dx: i32, dy: i32) -> Option<i32> {
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        collections::hash_map::DefaultHasher,
-        hash::{Hash, Hasher},
-    };
-
     use super::*;
 
     #[test]
