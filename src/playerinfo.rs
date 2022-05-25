@@ -1,9 +1,12 @@
 //! PlayerInfo stuff
 use anyhow::{anyhow, Context, Result};
 use bitstream_io::{BigEndian, BitWrite, BitWriter};
-use osrs_buffer::ByteBuffer;
+use osrs_buffer::WriteExt;
 use slab::Slab;
-use std::{cmp, io::Write};
+use std::{
+    cmp,
+    io::{Cursor, Write},
+};
 
 const MAX_PLAYERS: usize = 2047;
 const MAX_PLAYER_MASKS: usize = 15;
@@ -140,6 +143,12 @@ fn get_local_skip_count(
     Ok(count)
 }
 
+impl Default for PlayerInfo {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PlayerInfo {
     /// Create a new PlayerInfo
     pub fn new() -> PlayerInfo {
@@ -259,7 +268,7 @@ impl PlayerInfo {
 
         let mut main_buf = BitWriter::endian(Vec::new(), BigEndian);
         // Supply the mask buffer instead, as to prevent this big ass allocation
-        let mut mask_buf = ByteBuffer::new(60000);
+        let mut mask_buf = Cursor::new(vec![0; 60000]);
 
         // Write local player data (players around the player)
         self.local_player_info(player_id, &mut main_buf, &mut mask_buf, UPDATE_GROUP_ACTIVE)?;
@@ -289,7 +298,7 @@ impl PlayerInfo {
         let mut vec = main_buf.into_writer();
 
         // Write the mask_buf's data
-        vec.write_all(&mask_buf.data[..mask_buf.write_pos])?;
+        vec.write_all(&mask_buf.get_ref()[..mask_buf.position() as usize])?;
 
         // Group the records
         for i in 0..MAX_PLAYERS {
@@ -304,7 +313,7 @@ impl PlayerInfo {
         &mut self,
         player_id: usize,
         bit_buf: &mut BitWriter<Vec<u8>, bitstream_io::BigEndian>,
-        mask_buf: &mut ByteBuffer,
+        mask_buf: &mut Cursor<Vec<u8>>,
         update_group: i32,
     ) -> Result<()> {
         let mut skip_count = 0;
@@ -379,7 +388,7 @@ impl PlayerInfo {
             // This is only here because the borrow checker errors on "get_local_skip_count" as the PlayerInfo struct is borrowed when that function is called
             // Ideally this step should be after this whole block, so after write_skip_count.
             if mask_update {
-                write_mask_update(mask_buf, player_updates);
+                write_mask_update(mask_buf, player_updates)?;
             }
         }
 
@@ -406,8 +415,7 @@ impl PlayerInfo {
                 .context("failed 2")?;
 
             // Return if the playerinfo is not in this group
-            if !(!playerinfoentryother.local && (update_group & 0x1) == playerinfoentryother.flags)
-            {
+            if playerinfoentryother.local || (update_group & 0x1) != playerinfoentryother.flags {
                 continue;
             }
 
@@ -449,7 +457,7 @@ impl PlayerInfo {
         &mut self,
         player_id: usize,
         bit_buf: &mut BitWriter<Vec<u8>, bitstream_io::BigEndian>,
-        mask_buf: &mut ByteBuffer,
+        mask_buf: &mut Cursor<Vec<u8>>,
         update_group: i32,
     ) -> Result<i32> {
         let mut skip_count = 0;
@@ -464,8 +472,7 @@ impl PlayerInfo {
                 .context("failed 2")?;
 
             // Test whether the playerinfo is global, and whether it is in the correct update group (active, inactive)
-            if !(!playerinfoentryother.local && (update_group & 0x1) == playerinfoentryother.flags)
-            {
+            if playerinfoentryother.local || (update_group & 0x1) != playerinfoentryother.flags {
                 continue;
             }
 
@@ -603,12 +610,12 @@ const MASKS: [u32; 12] = [
     DIRECTION_MASK,
 ];
 
-fn write_mask_update(mask_buf: &mut ByteBuffer, playerinfo: &mut PlayerUpdate) {
+fn write_mask_update(mask_buf: &mut Cursor<Vec<u8>>, playerinfo: &mut PlayerUpdate) -> Result<()> {
     if playerinfo.mask_flags >= 0xFF {
-        mask_buf.write_i8((playerinfo.mask_flags | 0x40) as i8);
-        mask_buf.write_i8((playerinfo.mask_flags >> 8) as i8);
+        mask_buf.write_i8((playerinfo.mask_flags | 0x40) as i8)?;
+        mask_buf.write_i8((playerinfo.mask_flags >> 8) as i8)?;
     } else {
-        mask_buf.write_i8(playerinfo.mask_flags as i8);
+        mask_buf.write_i8(playerinfo.mask_flags as i8)?;
     }
 
     for mask in MASKS {
@@ -631,11 +638,13 @@ fn write_mask_update(mask_buf: &mut ByteBuffer, playerinfo: &mut PlayerUpdate) {
                     .expect("missing direction mask"),
                 mask_buf,
             ),
-            _ => (),
-        }
+            _ => Ok(()),
+        }?;
     }
 
     playerinfo.mask_flags = 0;
+
+    Ok(())
 }
 
 fn remove_local_player(
@@ -756,7 +765,7 @@ fn write_local_movement(
         let mut direction = 0;
 
         if let Some(run_step) = movement_steps.get(1) {
-            let run_rotation = get_direction_rotation(&run_step)?;
+            let run_rotation = get_direction_rotation(run_step)?;
 
             dx += *direction_diff_x
                 .get(run_rotation as usize)
@@ -800,64 +809,74 @@ fn write_mask_update_signal(
     Ok(())
 }
 
-fn write_direction_mask(direction_mask: &DirectionMask, mask_buf: &mut ByteBuffer) {
-    mask_buf.write_i16_add(direction_mask.direction);
+fn write_direction_mask(
+    direction_mask: &DirectionMask,
+    mask_buf: &mut Cursor<Vec<u8>>,
+) -> Result<()> {
+    mask_buf.write_i16_add(direction_mask.direction)?;
+
+    Ok(())
 }
 
-fn write_appearance_mask(appearance_mask: &AppearanceMask, mask_buf: &mut ByteBuffer) {
-    let mut temp_buf: ByteBuffer = ByteBuffer::new(200);
+fn write_appearance_mask(
+    appearance_mask: &AppearanceMask,
+    mask_buf: &mut Cursor<Vec<u8>>,
+) -> Result<()> {
+    let mut temp_buf = Cursor::new(Vec::new());
 
-    temp_buf.write_i8(appearance_mask.gender);
+    temp_buf.write_i8(appearance_mask.gender)?;
     if appearance_mask.skull {
-        temp_buf.write_i8(1)
+        temp_buf.write_i8(1)?;
     } else {
-        temp_buf.write_i8(-1)
+        temp_buf.write_i8(-1)?;
     }
 
-    temp_buf.write_i8(appearance_mask.overhead_prayer);
+    temp_buf.write_i8(appearance_mask.overhead_prayer)?;
 
     // Equipment here, skipped for now
-    temp_buf.write_i8(0); // Head
-    temp_buf.write_i8(0); // Cape
-    temp_buf.write_i8(0); // Neck
-    temp_buf.write_i8(0); // Weapon
+    temp_buf.write_i8(0)?; // Head
+    temp_buf.write_i8(0)?; // Cape
+    temp_buf.write_i8(0)?; // Neck
+    temp_buf.write_i8(0)?; // Weapon
 
-    temp_buf.write_i16(256 + 18); // Torso
-    temp_buf.write_i8(0); // Shield
-    temp_buf.write_i16(256 + appearance_mask.arms); // Arms
-    temp_buf.write_i16(256 + appearance_mask.legs); // Legs
-    temp_buf.write_i16(256 + appearance_mask.hair); // Hair
-    temp_buf.write_i16(256 + appearance_mask.hands); // Hands
-    temp_buf.write_i16(256 + appearance_mask.feet); // Feet
+    temp_buf.write_i16(256 + 18)?; // Torso
+    temp_buf.write_i8(0)?; // Shield
+    temp_buf.write_i16(256 + appearance_mask.arms)?; // Arms
+    temp_buf.write_i16(256 + appearance_mask.legs)?; // Legs
+    temp_buf.write_i16(256 + appearance_mask.hair)?; // Hair
+    temp_buf.write_i16(256 + appearance_mask.hands)?; // Hands
+    temp_buf.write_i16(256 + appearance_mask.feet)?; // Feet
 
     if appearance_mask.gender == 0 {
-        temp_buf.write_i16(256 + appearance_mask.beard); // Beard
+        temp_buf.write_i16(256 + appearance_mask.beard)?; // Beard
     } else {
-        temp_buf.write_i16(0);
+        temp_buf.write_i16(0)?;
     }
 
-    temp_buf.write_i8(appearance_mask.colors_hair);
-    temp_buf.write_i8(appearance_mask.colors_torso);
-    temp_buf.write_i8(appearance_mask.colors_legs);
-    temp_buf.write_i8(appearance_mask.colors_feet);
-    temp_buf.write_i8(appearance_mask.colors_skin);
+    temp_buf.write_i8(appearance_mask.colors_hair)?;
+    temp_buf.write_i8(appearance_mask.colors_torso)?;
+    temp_buf.write_i8(appearance_mask.colors_legs)?;
+    temp_buf.write_i8(appearance_mask.colors_feet)?;
+    temp_buf.write_i8(appearance_mask.colors_skin)?;
 
-    temp_buf.write_i16(appearance_mask.weapon_stance_stand);
-    temp_buf.write_i16(appearance_mask.weapon_stance_turn);
-    temp_buf.write_i16(appearance_mask.weapon_stance_walk);
-    temp_buf.write_i16(appearance_mask.weapon_stance_turn180);
-    temp_buf.write_i16(appearance_mask.weapon_stance_turn90cw);
-    temp_buf.write_i16(appearance_mask.weapon_stance_turn90ccw);
-    temp_buf.write_i16(appearance_mask.weapon_stance_run);
+    temp_buf.write_i16(appearance_mask.weapon_stance_stand)?;
+    temp_buf.write_i16(appearance_mask.weapon_stance_turn)?;
+    temp_buf.write_i16(appearance_mask.weapon_stance_walk)?;
+    temp_buf.write_i16(appearance_mask.weapon_stance_turn180)?;
+    temp_buf.write_i16(appearance_mask.weapon_stance_turn90cw)?;
+    temp_buf.write_i16(appearance_mask.weapon_stance_turn90ccw)?;
+    temp_buf.write_i16(appearance_mask.weapon_stance_run)?;
 
-    temp_buf.write_string_null_terminated(&appearance_mask.username);
-    temp_buf.write_i8(appearance_mask.combat_level);
-    temp_buf.write_i16(appearance_mask.skill_id_level);
-    temp_buf.write_i8(appearance_mask.hidden);
+    temp_buf.write_string_cp1252(&appearance_mask.username)?;
+    temp_buf.write_i8(appearance_mask.combat_level)?;
+    temp_buf.write_i16(appearance_mask.skill_id_level)?;
+    temp_buf.write_i8(appearance_mask.hidden)?;
 
-    mask_buf.write_i8(temp_buf.write_pos as i8);
+    mask_buf.write_i8(temp_buf.position() as i8)?;
 
-    mask_buf.write_bytes_reversed_add(&temp_buf);
+    mask_buf.write_bytes_reversed_add(temp_buf.get_ref())?;
+
+    Ok(())
 }
 
 fn get_direction_rotation(some_movement: &(i32, i32)) -> Result<i32> {
